@@ -10,7 +10,7 @@ import sys
 
 
 def get_version():
-    filename = 'labelme/__init__.py'
+    filename = 'labelpc/__init__.py'
     with open(filename) as f:
         match = re.search(
             r'''^__version__ = ['"]([^'"]*)['"]''', f.read(), re.M
