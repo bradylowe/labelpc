@@ -10,7 +10,7 @@ from labelpc.logger import logger
 from labelpc import PY2
 from labelpc import QT4
 from labelpc import utils
-
+from labelpc.pointcloud.Voxelize import VoxelGrid
 
 PIL.Image.MAX_IMAGE_PIXELS = None
 
@@ -61,9 +61,6 @@ class LabelFile(object):
         with File(filename) as f:
             points = np.array((f.x, f.y, f.z)).T
 
-        import sys
-        sys.path.append('/home/brady/PycharmProjects/PointBluePython/data')
-        from Voxelize import VoxelGrid
         vg = VoxelGrid(points, (mesh, mesh, thickness))
         bitmaps = vg.bitmap2d(max=2048, axis=2)
         from io import BytesIO
