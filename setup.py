@@ -81,7 +81,7 @@ def get_long_description():
     try:
         import github2pypi
         return github2pypi.replace_url(
-            slug='wkentaro/labelme', content=long_description
+            slug='bradylowe/labelpc', content=long_description
         )
     except Exception:
         return long_description
@@ -99,18 +99,18 @@ def main():
             sys.exit(1)
 
         commands = [
-            'python tests/docs_tests/man_tests/test_labelme_1.py',
+            'python tests/docs_tests/man_tests/test_labelpc_1.py',
             'git tag v{:s}'.format(version),
             'git push origin master --tag',
             'python setup.py sdist',
-            'twine upload dist/labelme-{:s}.tar.gz'.format(version),
+            'twine upload dist/labelpc-{:s}.tar.gz'.format(version),
         ]
         for cmd in commands:
             subprocess.check_call(shlex.split(cmd))
         sys.exit(0)
 
     setup(
-        name='labelme',
+        name='labelpc',
         version=version,
         packages=find_packages(exclude=['github2pypi']),
         description='Image Polygonal Annotation with Python',
@@ -118,7 +118,7 @@ def main():
         long_description_content_type='text/markdown',
         author='Kentaro Wada',
         author_email='www.kentaro.wada@gmail.com',
-        url='https://github.com/wkentaro/labelme',
+        url='https://github.com/bradylowe/labelpc',
         install_requires=get_install_requires(),
         license='GPLv3',
         keywords='Image Annotation, Machine Learning',
@@ -134,17 +134,17 @@ def main():
             'Programming Language :: Python :: Implementation :: CPython',
             'Programming Language :: Python :: Implementation :: PyPy',
         ],
-        package_data={'labelme': ['icons/*', 'config/*.yaml']},
+        package_data={'labelpc': ['icons/*', 'config/*.yaml']},
         entry_points={
             'console_scripts': [
-                'labelme=labelme.__main__:main',
-                'labelme_draw_json=labelme.cli.draw_json:main',
-                'labelme_draw_label_png=labelme.cli.draw_label_png:main',
-                'labelme_json_to_dataset=labelme.cli.json_to_dataset:main',
-                'labelme_on_docker=labelme.cli.on_docker:main',
+                'labelpc=labelpc.__main__:main',
+                'labelpc_draw_json=labelpc.cli.draw_json:main',
+                'labelpc_draw_label_png=labelpc.cli.draw_label_png:main',
+                'labelpc_json_to_dataset=labelpc.cli.json_to_dataset:main',
+                'labelpc_on_docker=labelpc.cli.on_docker:main',
             ],
         },
-        data_files=[('share/man/man1', ['docs/man/labelme.1'])],
+        data_files=[('share/man/man1', ['docs/man/labelpc.1'])],
     )
 
 
