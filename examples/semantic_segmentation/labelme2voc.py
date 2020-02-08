@@ -11,7 +11,7 @@ import sys
 import imgviz
 import numpy as np
 
-import labelme
+import labelpc
 
 
 def main():
@@ -61,7 +61,7 @@ def main():
     for filename in glob.glob(osp.join(args.input_dir, '*.json')):
         print('Generating dataset from:', filename)
 
-        label_file = labelme.LabelFile(filename=filename)
+        label_file = labelpc.LabelFile(filename=filename)
 
         base = osp.splitext(osp.basename(filename))[0]
         out_img_file = osp.join(
@@ -79,14 +79,14 @@ def main():
 
         with open(out_img_file, 'wb') as f:
             f.write(label_file.imageData)
-        img = labelme.utils.img_data_to_arr(label_file.imageData)
+        img = labelpc.utils.img_data_to_arr(label_file.imageData)
 
-        lbl, _ = labelme.utils.shapes_to_label(
+        lbl, _ = labelpc.utils.shapes_to_label(
             img_shape=img.shape,
             shapes=label_file.shapes,
             label_name_to_value=class_name_to_id,
         )
-        labelme.utils.lblsave(out_png_file, lbl)
+        labelpc.utils.lblsave(out_png_file, lbl)
 
         np.save(out_lbl_file, lbl)
 

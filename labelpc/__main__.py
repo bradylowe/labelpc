@@ -9,12 +9,12 @@ import yaml
 from qtpy import QtCore
 from qtpy import QtWidgets
 
-from labelme import __appname__
-from labelme import __version__
-from labelme.app import MainWindow
-from labelme.config import get_config
-from labelme.logger import logger
-from labelme.utils import newIcon
+from labelpc import __appname__
+from labelpc import __version__
+from labelpc.app import MainWindow
+from labelpc.config import get_config
+from labelpc.logger import logger
+from labelpc.utils import newIcon
 
 
 def main():

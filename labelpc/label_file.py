@@ -5,11 +5,11 @@ import os.path as osp
 
 import PIL.Image
 
-from labelme import __version__
-from labelme.logger import logger
-from labelme import PY2
-from labelme import QT4
-from labelme import utils
+from labelpc import __version__
+from labelpc.logger import logger
+from labelpc import PY2
+from labelpc import QT4
+from labelpc import utils
 
 
 PIL.Image.MAX_IMAGE_PIXELS = None
@@ -53,6 +53,30 @@ class LabelFile(object):
             image_pil.save(f, format=format)
             f.seek(0)
             return f.read()
+
+    @staticmethod
+    def load_point_cloud_file(filename, mesh=0.02, thickness=0.1):
+        from laspy.file import File
+        import numpy as np
+        with File(filename) as f:
+            points = np.array((f.x, f.y, f.z)).T
+
+        import sys
+        sys.path.append('/home/brady/PycharmProjects/PointBluePython/data')
+        from Voxelize import VoxelGrid
+        vg = VoxelGrid(points, (mesh, mesh, thickness))
+        bitmaps = vg.bitmap2d(max=2048, axis=2)
+        from io import BytesIO
+        from PIL import Image
+        data = []
+        for m in bitmaps:
+            img = Image.fromarray(np.asarray(np.clip(m, 0, 255), dtype="uint8"), "L")
+            buff = BytesIO()
+            img.save(buff, format="JPEG")
+            buff.seek(0)
+            data.append(buff.read())
+        return data
+
 
     def load(self, filename):
         keys = [

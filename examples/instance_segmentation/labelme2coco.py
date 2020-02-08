@@ -13,7 +13,7 @@ import uuid
 import numpy as np
 import PIL.Image
 
-import labelme
+import labelpc
 
 try:
     import pycocotools.mask
@@ -114,7 +114,7 @@ def main():
             label = shape['label']
             group_id = shape.get('group_id')
             shape_type = shape.get('shape_type')
-            mask = labelme.utils.shape_to_mask(
+            mask = labelpc.utils.shape_to_mask(
                 img.shape[:2], points, shape_type
             )
 

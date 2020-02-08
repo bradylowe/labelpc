@@ -7,8 +7,8 @@ from qtpy import QtWidgets
 
 QT5 = QT_VERSION[0] == '5'  # NOQA
 
-from labelme.logger import logger
-import labelme.utils
+from labelpc.logger import logger
+import labelpc.utils
 
 
 # TODO(unknown):
@@ -39,7 +39,7 @@ class LabelDialog(QtWidgets.QDialog):
         super(LabelDialog, self).__init__(parent)
         self.edit = LabelQLineEdit()
         self.edit.setPlaceholderText(text)
-        self.edit.setValidator(labelme.utils.labelValidator())
+        self.edit.setValidator(labelpc.utils.labelValidator())
         self.edit.editingFinished.connect(self.postProcess)
         if flags:
             self.edit.textChanged.connect(self.updateFlags)
@@ -60,8 +60,8 @@ class LabelDialog(QtWidgets.QDialog):
             QtCore.Qt.Horizontal,
             self,
         )
-        bb.button(bb.Ok).setIcon(labelme.utils.newIcon('done'))
-        bb.button(bb.Cancel).setIcon(labelme.utils.newIcon('undo'))
+        bb.button(bb.Ok).setIcon(labelpc.utils.newIcon('done'))
+        bb.button(bb.Cancel).setIcon(labelpc.utils.newIcon('undo'))
         bb.accepted.connect(self.validate)
         bb.rejected.connect(self.reject)
         layout.addWidget(bb)

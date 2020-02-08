@@ -1,40 +1,32 @@
+#!/usr/bin/env python
+
 import argparse
 import base64
 import json
 import os
-import os.path as osp
+import sys
 
 import imgviz
-import PIL.Image
+import matplotlib.pyplot as plt
 
-from labelme.logger import logger
-from labelme import utils
+from labelpc import utils
+
+
+PY2 = sys.version_info[0] == 2
 
 
 def main():
-    logger.warning('This script is aimed to demonstrate how to convert the'
-                   'JSON file to a single image dataset, and not to handle'
-                   'multiple JSON files to generate a real-use dataset.')
-
     parser = argparse.ArgumentParser()
     parser.add_argument('json_file')
-    parser.add_argument('-o', '--out', default=None)
     args = parser.parse_args()
 
     json_file = args.json_file
 
-    if args.out is None:
-        out_dir = osp.basename(json_file).replace('.', '_')
-        out_dir = osp.join(osp.dirname(json_file), out_dir)
-    else:
-        out_dir = args.out
-    if not osp.exists(out_dir):
-        os.mkdir(out_dir)
-
     data = json.load(open(json_file))
-    imageData = data.get('imageData')
 
-    if not imageData:
+    if data['imageData']:
+        imageData = data['imageData']
+    else:
         imagePath = os.path.join(os.path.dirname(json_file), data['imagePath'])
         with open(imagePath, 'rb') as f:
             imageData = f.read()
@@ -56,20 +48,19 @@ def main():
     label_names = [None] * (max(label_name_to_value.values()) + 1)
     for name, value in label_name_to_value.items():
         label_names[value] = name
-
     lbl_viz = imgviz.label2rgb(
-        label=lbl, img=imgviz.asgray(img), label_names=label_names, loc='rb'
+        label=lbl,
+        img=imgviz.rgb2gray(img),
+        label_names=label_names,
+        font_size=30,
+        loc='rb',
     )
 
-    PIL.Image.fromarray(img).save(osp.join(out_dir, 'img.png'))
-    utils.lblsave(osp.join(out_dir, 'label.png'), lbl)
-    PIL.Image.fromarray(lbl_viz).save(osp.join(out_dir, 'label_viz.png'))
-
-    with open(osp.join(out_dir, 'label_names.txt'), 'w') as f:
-        for lbl_name in label_names:
-            f.write(lbl_name + '\n')
-
-    logger.info('Saved to: {}'.format(out_dir))
+    plt.subplot(121)
+    plt.imshow(img)
+    plt.subplot(122)
+    plt.imshow(lbl_viz)
+    plt.show()
 
 
 if __name__ == '__main__':

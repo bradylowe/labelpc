@@ -22,6 +22,6 @@ PY2 = sys.version[0] == '2'
 PY3 = sys.version[0] == '3'
 del sys
 
-from labelme.label_file import LabelFile
-from labelme import testing
-from labelme import utils
+from labelpc.label_file import LabelFile
+from labelpc import testing
+from labelpc import utils

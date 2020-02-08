@@ -1,6 +1,6 @@
 from .util import get_img_and_data
 
-from labelme.utils import shape as shape_module
+from labelpc.utils import shape as shape_module
 
 
 def test_shapes_to_label():

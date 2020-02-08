@@ -13,7 +13,7 @@ import imgviz
 import numpy as np
 import PIL.Image
 
-import labelme
+import labelpc
 
 
 def main():
@@ -99,7 +99,7 @@ def main():
             img = np.asarray(PIL.Image.open(img_file))
             PIL.Image.fromarray(img).save(out_img_file)
 
-            cls, ins = labelme.utils.shapes_to_label(
+            cls, ins = labelpc.utils.shapes_to_label(
                 img_shape=img.shape,
                 shapes=data['shapes'],
                 label_name_to_value=class_name_to_id,
@@ -107,7 +107,7 @@ def main():
             ins[cls == -1] = 0  # ignore it.
 
             # class label
-            labelme.utils.lblsave(out_clsp_file, cls)
+            labelpc.utils.lblsave(out_clsp_file, cls)
             np.save(out_cls_file, cls)
             if not args.noviz:
                 clsv = imgviz.label2rgb(
@@ -120,7 +120,7 @@ def main():
                 imgviz.io.imsave(out_clsv_file, clsv)
 
             # instance label
-            labelme.utils.lblsave(out_insp_file, ins)
+            labelpc.utils.lblsave(out_insp_file, ins)
             np.save(out_ins_file, ins)
             if not args.noviz:
                 instance_ids = np.unique(ins)

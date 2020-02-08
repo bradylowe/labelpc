@@ -12,23 +12,23 @@ from qtpy.QtCore import Qt
 from qtpy import QtGui
 from qtpy import QtWidgets
 
-from labelme import __appname__
-from labelme import PY2
-from labelme import QT5
+from labelpc import __appname__
+from labelpc import PY2
+from labelpc import QT5
 
 from . import utils
-from labelme.config import get_config
-from labelme.label_file import LabelFile
-from labelme.label_file import LabelFileError
-from labelme.logger import logger
-from labelme.shape import Shape
-from labelme.widgets import Canvas
-from labelme.widgets import ColorDialog
-from labelme.widgets import LabelDialog
-from labelme.widgets import LabelQListWidget
-from labelme.widgets import ToolBar
-from labelme.widgets import UniqueLabelQListWidget
-from labelme.widgets import ZoomWidget
+from labelpc.config import get_config
+from labelpc.label_file import LabelFile
+from labelpc.label_file import LabelFileError
+from labelpc.logger import logger
+from labelpc.shape import Shape
+from labelpc.widgets import Canvas
+from labelpc.widgets import ColorDialog
+from labelpc.widgets import LabelDialog
+from labelpc.widgets import LabelQListWidget
+from labelpc.widgets import ToolBar
+from labelpc.widgets import UniqueLabelQListWidget
+from labelpc.widgets import ZoomWidget
 
 
 # FIXME
@@ -57,6 +57,8 @@ class MainWindow(QtWidgets.QMainWindow):
         output_file=None,
         output_dir=None,
     ):
+        self.sliceIdx = 0
+
         if output is not None:
             logger.warning(
                 'argument output is deprecated, use output_file instead'
@@ -195,12 +197,29 @@ class MainWindow(QtWidgets.QMainWindow):
         quit = action(self.tr('&Quit'), self.close, shortcuts['quit'], 'quit',
                       self.tr('Quit application'))
         open_ = action(self.tr('&Open'),
-                       self.openFile,
+                       #self.openFile,
+                       self.openPointCloud,
                        shortcuts['open'],
                        'open',
                        self.tr('Open image or label file'))
-        opendir = action(self.tr('&Open Dir'), self.openDirDialog,
-                         shortcuts['open_dir'], 'open', self.tr(u'Open Dir'))
+        #opendir = action(self.tr('&Open Dir'), self.openDirDialog,
+        #                 shortcuts['open_dir'], 'open', self.tr(u'Open Dir'))
+        showNextSlice = action(
+            self.tr('Next Slice'),
+            self.showNextSlice,
+            None,
+            'next slice',
+            self.tr(u'Show next slice of point cloud'),
+            enabled=False,
+        )
+        showLastSlice = action(
+            self.tr('Last Slice'),
+            self.showLastSlice,
+            None,
+            'next slice',
+            self.tr(u'Show previous slice of point cloud'),
+            enabled=False,
+        )
         openNextImg = action(
             self.tr('&Next Image'),
             self.openNextImg,
@@ -459,8 +478,10 @@ class MainWindow(QtWidgets.QMainWindow):
             zoom=zoom, zoomIn=zoomIn, zoomOut=zoomOut, zoomOrg=zoomOrg,
             fitWindow=fitWindow, fitWidth=fitWidth,
             zoomActions=zoomActions,
+            showNextSlice=showNextSlice, showLastSlice=showLastSlice,
             openNextImg=openNextImg, openPrevImg=openPrevImg,
-            fileMenuActions=(open_, opendir, save, saveAs, close, quit),
+            #fileMenuActions=(open_, opendir, save, saveAs, close, quit),
+            fileMenuActions=(open_, save, saveAs, close, quit),
             tool=(),
             # XXX: need to add some actions here to activate the shortcut
             editMenu=(
@@ -523,7 +544,9 @@ class MainWindow(QtWidgets.QMainWindow):
                 open_,
                 openNextImg,
                 openPrevImg,
-                opendir,
+                showNextSlice,
+                showLastSlice,
+                #opendir,
                 self.menus.recentFiles,
                 save,
                 saveAs,
@@ -576,9 +599,11 @@ class MainWindow(QtWidgets.QMainWindow):
         # Menu buttons on Left
         self.actions.tool = (
             open_,
-            opendir,
+            #opendir,
             openNextImg,
             openPrevImg,
+            showNextSlice,
+            showLastSlice,
             save,
             deleteFile,
             None,
@@ -1294,11 +1319,15 @@ class MainWindow(QtWidgets.QMainWindow):
             )
             self.otherData = self.labelFile.otherData
         else:
-            self.imageData = LabelFile.load_image_file(filename)
-            if self.imageData:
+            #self.imageData = LabelFile.load_image_file(filename)  # Loading point cloud data instead of image
+            self.imageData = LabelFile.load_point_cloud_file(filename)
+            self.actions.showNextSlice.setEnabled(True)
+            self.actions.showLastSlice.setEnabled(True)
+            # Changed code below to handle an array of imageData rather than a single imageData
+            if self.imageData[0]:
                 self.imagePath = filename
             self.labelFile = None
-        image = QtGui.QImage.fromData(self.imageData)
+        image = QtGui.QImage.fromData(self.imageData[self.sliceIdx])
 
         if image.isNull():
             formats = ['*.{}'.format(fmt.data().decode())
@@ -1317,12 +1346,12 @@ class MainWindow(QtWidgets.QMainWindow):
         if self._config['keep_prev']:
             prev_shapes = self.canvas.shapes
         self.canvas.loadPixmap(QtGui.QPixmap.fromImage(image))
-        flags = {k: False for k in self._config['flags'] or []}
+        if self._config['flags']:
+            self.loadFlags({k: False for k in self._config['flags']})
         if self.labelFile:
             self.loadLabels(self.labelFile.shapes)
             if self.labelFile.flags is not None:
-                flags.update(self.labelFile.flags)
-        self.loadFlags(flags)
+                self.loadFlags(self.labelFile.flags)
         if self._config['keep_prev'] and not self.labelList.shapes:
             self.loadShapes(prev_shapes, replace=False)
             self.setDirty()
@@ -1407,7 +1436,8 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def openPrevImg(self, _value=False):
         keep_prev = self._config['keep_prev']
-        if Qt.KeyboardModifiers() == (Qt.ControlModifier | Qt.ShiftModifier):
+        if QtGui.QGuiApplication.keyboardModifiers() == \
+                (QtCore.Qt.ControlModifier | QtCore.Qt.ShiftModifier):
             self._config['keep_prev'] = True
 
         if not self.mayContinue():
@@ -1427,9 +1457,30 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self._config['keep_prev'] = keep_prev
 
+    def showNextSlice(self, _value=False):
+        if not self.imageData or len(self.imageData) <= 1:
+            return
+        self.sliceIdx += 1
+        if self.sliceIdx >= len(self.imageData):
+            self.sliceIdx = 0
+        self.image = QtGui.QImage.fromData(self.imageData[self.sliceIdx])
+        self.canvas.loadPixmap(QtGui.QPixmap.fromImage(self.image))
+        self.paintCanvas()
+
+    def showLastSlice(self, _value=False):
+        if not self.imageData or len(self.imageData) <= 1:
+            return
+        self.sliceIdx -= 1
+        if self.sliceIdx < 0:
+            self.sliceIdx = len(self.imageData) - 1
+        self.image = QtGui.QImage.fromData(self.imageData[self.sliceIdx])
+        self.canvas.loadPixmap(QtGui.QPixmap.fromImage(self.image))
+        self.paintCanvas()
+
     def openNextImg(self, _value=False, load=True):
         keep_prev = self._config['keep_prev']
-        if Qt.KeyboardModifiers() == (Qt.ControlModifier | Qt.ShiftModifier):
+        if QtGui.QGuiApplication.keyboardModifiers() == \
+                (QtCore.Qt.ControlModifier | QtCore.Qt.ShiftModifier):
             self._config['keep_prev'] = True
 
         if not self.mayContinue():
@@ -1465,6 +1516,21 @@ class MainWindow(QtWidgets.QMainWindow):
         filename = QtWidgets.QFileDialog.getOpenFileName(
             self, self.tr('%s - Choose Image or Label file') % __appname__,
             path, filters)
+        if QT5:
+            filename, _ = filename
+        filename = str(filename)
+        if filename:
+            self.loadFile(filename)
+
+    def openPointCloud(self, _value=False):
+        if not self.mayContinue():
+            return
+        path = osp.dirname(str(self.filename)) if self.filename else '.'
+        formats = ['*.las']
+        filters = self.tr("Point Cloud files (%s)") % ' '.join(
+            formats + ['*%s' % LabelFile.suffix])
+        filename = QtWidgets.QFileDialog.getOpenFileName(
+            self, self.tr('%s - Choose Point Cloud file') % __appname__, path, filters)
         if QT5:
             filename, _ = filename
         filename = str(filename)
@@ -1550,8 +1616,9 @@ class MainWindow(QtWidgets.QMainWindow):
         filename = dlg.getSaveFileName(
             self, self.tr('Choose File'), default_labelfile_name,
             self.tr('Label files (*%s)') % LabelFile.suffix)
-        if isinstance(filename, tuple):
+        if QT5:
             filename, _ = filename
+        filename = str(filename)
         return filename
 
     def _saveFile(self, filename):
