@@ -515,6 +515,8 @@ class MainWindow(QtWidgets.QMainWindow):
             ),
             onLoadActive=(
                 close,
+                showNextSlice,
+                showLastSlice,
                 createMode,
                 createRectangleMode,
                 createCircleMode,
@@ -1319,10 +1321,7 @@ class MainWindow(QtWidgets.QMainWindow):
             )
             self.otherData = self.labelFile.otherData
         else:
-            #self.imageData = LabelFile.load_image_file(filename)  # Loading point cloud data instead of image
             self.imageData = LabelFile.load_point_cloud_file(filename)
-            self.actions.showNextSlice.setEnabled(True)
-            self.actions.showLastSlice.setEnabled(True)
             # Changed code below to handle an array of imageData rather than a single imageData
             if self.imageData[0]:
                 self.imagePath = filename
@@ -1465,7 +1464,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.sliceIdx = 0
         self.image = QtGui.QImage.fromData(self.imageData[self.sliceIdx])
         self.canvas.loadPixmap(QtGui.QPixmap.fromImage(self.image))
-        self.paintCanvas()
+        self.canvas.loadShapes(self.labelList.shapes)
 
     def showLastSlice(self, _value=False):
         if not self.imageData or len(self.imageData) <= 1:
@@ -1475,7 +1474,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.sliceIdx = len(self.imageData) - 1
         self.image = QtGui.QImage.fromData(self.imageData[self.sliceIdx])
         self.canvas.loadPixmap(QtGui.QPixmap.fromImage(self.image))
-        self.paintCanvas()
+        self.canvas.loadShapes(self.labelList.shapes)
 
     def openNextImg(self, _value=False, load=True):
         keep_prev = self._config['keep_prev']
