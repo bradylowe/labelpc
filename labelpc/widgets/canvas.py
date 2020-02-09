@@ -22,6 +22,8 @@ class Canvas(QtWidgets.QWidget):
 
     zoomRequest = QtCore.Signal(int, QtCore.QPoint)
     scrollRequest = QtCore.Signal(int, int)
+    nextSliceRequest = QtCore.Signal()
+    lastSliceRequest = QtCore.Signal()
     newShape = QtCore.Signal()
     selectionChanged = QtCore.Signal(list)
     shapeMoved = QtCore.Signal()
@@ -641,6 +643,12 @@ class Canvas(QtWidgets.QWidget):
                 # with Ctrl/Command key
                 # zoom
                 self.zoomRequest.emit(delta.y(), ev.pos())
+            elif QtCore.Qt.ShiftModifier == int(mods):
+                # with Shift key, scroll through slices
+                if delta.y() > 0:
+                    self.nextSliceRequest.emit()
+                else:
+                    self.lastSliceRequest.emit()
             else:
                 # scroll
                 self.scrollRequest.emit(delta.x(), QtCore.Qt.Horizontal)

@@ -55,11 +55,13 @@ class LabelFile(object):
             return f.read()
 
     @staticmethod
-    def load_point_cloud_file(filename, mesh=0.02, thickness=0.1):
+    def load_point_cloud_file(filename, mesh=0.02, thickness=0.1, max_points=5000000):
         from laspy.file import File
         import numpy as np
         with File(filename) as f:
             points = np.array((f.x, f.y, f.z)).T
+            if len(points) > max_points:
+                points = points[np.random.choice(max_points, len(points))]
 
         vg = VoxelGrid(points, (mesh, mesh, thickness))
         bitmaps = vg.bitmap2d(max=2048, axis=2)

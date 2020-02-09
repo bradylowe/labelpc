@@ -166,6 +166,8 @@ class MainWindow(QtWidgets.QMainWindow):
             Qt.Horizontal: scrollArea.horizontalScrollBar(),
         }
         self.canvas.scrollRequest.connect(self.scrollRequest)
+        self.canvas.nextSliceRequest.connect(self.showNextSlice)
+        self.canvas.lastSliceRequest.connect(self.showLastSlice)
 
         self.canvas.newShape.connect(self.newShape)
         self.canvas.shapeMoved.connect(self.setDirty)
