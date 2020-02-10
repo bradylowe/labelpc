@@ -1,9 +1,11 @@
 import base64
-import io
 import json
 import os.path as osp
 
 import PIL.Image
+from io import BytesIO
+from laspy.file import File
+import numpy as np
 
 from labelpc import __version__
 from labelpc.logger import logger
@@ -32,32 +34,7 @@ class LabelFile(object):
         self.filename = filename
 
     @staticmethod
-    def load_image_file(filename):
-        try:
-            image_pil = PIL.Image.open(filename)
-        except IOError:
-            logger.error('Failed opening image file: {}'.format(filename))
-            return
-
-        # apply orientation to image according to exif
-        image_pil = utils.apply_exif_orientation(image_pil)
-
-        with io.BytesIO() as f:
-            ext = osp.splitext(filename)[1].lower()
-            if PY2 and QT4:
-                format = 'PNG'
-            elif ext in ['.jpg', '.jpeg']:
-                format = 'JPEG'
-            else:
-                format = 'PNG'
-            image_pil.save(f, format=format)
-            f.seek(0)
-            return f.read()
-
-    @staticmethod
-    def load_point_cloud_file(filename, mesh=0.02, thickness=0.1, max_points=5000000):
-        from laspy.file import File
-        import numpy as np
+    def load_point_cloud_file(filename, mesh=0.05, thickness=0.2, max_points=5000000):
         with File(filename) as f:
             points = np.array((f.x, f.y, f.z)).T
             if len(points) > max_points:
@@ -65,22 +42,22 @@ class LabelFile(object):
 
         vg = VoxelGrid(points, (mesh, mesh, thickness))
         bitmaps = vg.bitmap2d(max=2048, axis=2)
-        from io import BytesIO
-        from PIL import Image
+        # Stack 3 copies on top of each other to form RGB image (but still black and white at this point)
+        for i in range(len(bitmaps)):
+            bitmaps[i] = np.dstack((bitmaps[i], bitmaps[i], bitmaps[i]))
         data = []
         for m in bitmaps:
-            img = Image.fromarray(np.asarray(np.clip(m, 0, 255), dtype="uint8"), "L")
+            img = PIL.Image.fromarray(np.asarray(np.clip(m, 0, 255), dtype="uint8"))
             buff = BytesIO()
             img.save(buff, format="JPEG")
             buff.seek(0)
             data.append(buff.read())
-        return data
+        return data, vg.min_corner(), mesh
 
 
     def load(self, filename):
         keys = [
             'version',
-            'imageData',
             'imagePath',
             'shapes',  # polygonal annotations
             'flags',   # image level flags
@@ -105,21 +82,8 @@ class LabelFile(object):
                     )
                 )
 
-            if data['imageData'] is not None:
-                imageData = base64.b64decode(data['imageData'])
-                if PY2 and QT4:
-                    imageData = utils.img_data_to_png_data(imageData)
-            else:
-                # relative path from label file to relative path from cwd
-                imagePath = osp.join(osp.dirname(filename), data['imagePath'])
-                imageData = self.load_image_file(imagePath)
-            flags = data.get('flags') or {}
             imagePath = data['imagePath']
-            self._check_image_height_and_width(
-                base64.b64encode(imageData).decode('utf-8'),
-                data.get('imageHeight'),
-                data.get('imageWidth'),
-            )
+            flags = data.get('flags') or {}
             shapes = [
                 dict(
                     label=s['label'],
@@ -142,7 +106,6 @@ class LabelFile(object):
         self.flags = flags
         self.shapes = shapes
         self.imagePath = imagePath
-        self.imageData = imageData
         self.filename = filename
         self.otherData = otherData
 
@@ -170,15 +133,9 @@ class LabelFile(object):
         imagePath,
         imageHeight,
         imageWidth,
-        imageData=None,
         otherData=None,
         flags=None,
     ):
-        if imageData is not None:
-            imageData = base64.b64encode(imageData).decode('utf-8')
-            imageHeight, imageWidth = self._check_image_height_and_width(
-                imageData, imageHeight, imageWidth
-            )
         if otherData is None:
             otherData = {}
         if flags is None:
@@ -188,7 +145,6 @@ class LabelFile(object):
             flags=flags,
             shapes=shapes,
             imagePath=imagePath,
-            imageData=imageData,
             imageHeight=imageHeight,
             imageWidth=imageWidth,
         )

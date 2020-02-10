@@ -546,8 +546,8 @@ class MainWindow(QtWidgets.QMainWindow):
             self.menus.file,
             (
                 open_,
-                openNextImg,
-                openPrevImg,
+                #openNextImg,
+                #openPrevImg,
                 showNextSlice,
                 showLastSlice,
                 #opendir,
@@ -1076,7 +1076,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 group_id=group_id,
             )
             for x, y in points:
-                shape.addPoint(QtCore.QPointF(x, y))
+                shape.addPoint(QtCore.QPointF((x-self.offset[0]) / self.scale, (y-self.offset[1]) / self.scale))
             shape.close()
 
             default_flags = {}
@@ -1105,7 +1105,7 @@ class MainWindow(QtWidgets.QMainWindow):
         def format_shape(s):
             return dict(
                 label=s.label.encode('utf-8') if PY2 else s.label,
-                points=[(p.x(), p.y()) for p in s.points],
+                points=[(p.x()*self.scale+self.offset[0], p.y()*self.scale+self.offset[1]) for p in s.points],
                 group_id=s.group_id,
                 shape_type=s.shape_type,
                 flags=s.flags
@@ -1128,7 +1128,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 filename=filename,
                 shapes=shapes,
                 imagePath=imagePath,
-                imageData=imageData,
+                #imageData=imageData,
                 imageHeight=self.image.height(),
                 imageWidth=self.image.width(),
                 otherData=self.otherData,
@@ -1316,18 +1316,13 @@ class MainWindow(QtWidgets.QMainWindow):
                 )
                 self.status(self.tr("Error reading %s") % label_file)
                 return False
-            self.imageData = self.labelFile.imageData
-            self.imagePath = osp.join(
-                osp.dirname(label_file),
-                self.labelFile.imagePath,
-            )
             self.otherData = self.labelFile.otherData
         else:
-            self.imageData = LabelFile.load_point_cloud_file(filename)
-            # Changed code below to handle an array of imageData rather than a single imageData
-            if self.imageData[0]:
-                self.imagePath = filename
             self.labelFile = None
+
+        # Load point cloud data and convert to Pixmaps
+        self.imageData, self.offset, self.scale = LabelFile.load_point_cloud_file(filename)
+        self.imagePath = filename
         image = QtGui.QImage.fromData(self.imageData[self.sliceIdx])
 
         if image.isNull():
