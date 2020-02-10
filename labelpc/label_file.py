@@ -1,20 +1,9 @@
-import base64
 import json
 import os.path as osp
-
-import PIL.Image
-from io import BytesIO
-from laspy.file import File
-import numpy as np
 
 from labelpc import __version__
 from labelpc.logger import logger
 from labelpc import PY2
-from labelpc import QT4
-from labelpc import utils
-from labelpc.pointcloud.Voxelize import VoxelGrid
-
-PIL.Image.MAX_IMAGE_PIXELS = None
 
 
 class LabelFileError(Exception):
@@ -27,42 +16,17 @@ class LabelFile(object):
 
     def __init__(self, filename=None):
         self.shapes = []
-        self.imagePath = None
-        self.imageData = None
+        self.sourcePath = None
         if filename is not None:
             self.load(filename)
         self.filename = filename
 
-    @staticmethod
-    def load_point_cloud_file(filename, mesh=0.05, thickness=0.2, max_points=5000000):
-        with File(filename) as f:
-            points = np.array((f.x, f.y, f.z)).T
-            if len(points) > max_points:
-                points = points[np.random.choice(max_points, len(points))]
-
-        vg = VoxelGrid(points, (mesh, mesh, thickness))
-        bitmaps = vg.bitmap2d(max=2048, axis=2)
-        # Stack 3 copies on top of each other to form RGB image (but still black and white at this point)
-        for i in range(len(bitmaps)):
-            bitmaps[i] = np.dstack((bitmaps[i], bitmaps[i], bitmaps[i]))
-        data = []
-        for m in bitmaps:
-            img = PIL.Image.fromarray(np.asarray(np.clip(m, 0, 255), dtype="uint8"))
-            buff = BytesIO()
-            img.save(buff, format="JPEG")
-            buff.seek(0)
-            data.append(buff.read())
-        return data, vg.min_corner(), mesh
-
-
     def load(self, filename):
         keys = [
             'version',
-            'imagePath',
+            'sourcePath',
             'shapes',  # polygonal annotations
             'flags',   # image level flags
-            'imageHeight',
-            'imageWidth',
         ]
         try:
             with open(filename, 'rb' if PY2 else 'r') as f:
@@ -76,13 +40,13 @@ class LabelFile(object):
             elif version.split('.')[0] != __version__.split('.')[0]:
                 logger.warn(
                     'This JSON file ({}) may be incompatible with '
-                    'current labelme. version in file: {}, '
+                    'current labelpc. version in file: {}, '
                     'current version: {}'.format(
                         filename, version, __version__
                     )
                 )
 
-            imagePath = data['imagePath']
+            sourcePath = data['sourcePath']
             flags = data.get('flags') or {}
             shapes = [
                 dict(
@@ -105,34 +69,15 @@ class LabelFile(object):
         # Only replace data after everything is loaded.
         self.flags = flags
         self.shapes = shapes
-        self.imagePath = imagePath
+        self.sourcePath = sourcePath
         self.filename = filename
         self.otherData = otherData
-
-    @staticmethod
-    def _check_image_height_and_width(imageData, imageHeight, imageWidth):
-        img_arr = utils.img_b64_to_arr(imageData)
-        if imageHeight is not None and img_arr.shape[0] != imageHeight:
-            logger.error(
-                'imageHeight does not match with imageData or imagePath, '
-                'so getting imageHeight from actual image.'
-            )
-            imageHeight = img_arr.shape[0]
-        if imageWidth is not None and img_arr.shape[1] != imageWidth:
-            logger.error(
-                'imageWidth does not match with imageData or imagePath, '
-                'so getting imageWidth from actual image.'
-            )
-            imageWidth = img_arr.shape[1]
-        return imageHeight, imageWidth
 
     def save(
         self,
         filename,
         shapes,
-        imagePath,
-        imageHeight,
-        imageWidth,
+        sourcePath,
         otherData=None,
         flags=None,
     ):
@@ -144,9 +89,7 @@ class LabelFile(object):
             version=__version__,
             flags=flags,
             shapes=shapes,
-            imagePath=imagePath,
-            imageHeight=imageHeight,
-            imageWidth=imageWidth,
+            sourcePath=sourcePath,
         )
         for key, value in otherData.items():
             assert key not in data

@@ -6,6 +6,10 @@ import os.path as osp
 import re
 import webbrowser
 
+import PIL.Image
+from io import BytesIO
+import numpy as np
+
 import imgviz
 from qtpy import QtCore
 from qtpy.QtCore import Qt
@@ -29,6 +33,9 @@ from labelpc.widgets import LabelQListWidget
 from labelpc.widgets import ToolBar
 from labelpc.widgets import UniqueLabelQListWidget
 from labelpc.widgets import ZoomWidget
+
+from labelpc.pointcloud.PointCloud import PointCloud
+from labelpc.pointcloud.Voxelize import VoxelGrid
 
 
 # FIXME
@@ -57,7 +64,6 @@ class MainWindow(QtWidgets.QMainWindow):
         output_file=None,
         output_dir=None,
     ):
-        self.sliceIdx = 0
 
         if output is not None:
             logger.warning(
@@ -220,22 +226,6 @@ class MainWindow(QtWidgets.QMainWindow):
             None,
             'next slice',
             self.tr(u'Show previous slice of point cloud'),
-            enabled=False,
-        )
-        openNextImg = action(
-            self.tr('&Next Image'),
-            self.openNextImg,
-            shortcuts['open_next'],
-            'next',
-            self.tr(u'Open next (hold Ctl+Shift to copy labels)'),
-            enabled=False,
-        )
-        openPrevImg = action(
-            self.tr('&Prev Image'),
-            self.openPrevImg,
-            shortcuts['open_prev'],
-            'prev',
-            self.tr(u'Open prev (hold Ctl+Shift to copy labels)'),
             enabled=False,
         )
         save = action(self.tr('&Save'),
@@ -546,11 +536,8 @@ class MainWindow(QtWidgets.QMainWindow):
             self.menus.file,
             (
                 open_,
-                #openNextImg,
-                #openPrevImg,
                 showNextSlice,
                 showLastSlice,
-                #opendir,
                 self.menus.recentFiles,
                 save,
                 saveAs,
@@ -603,9 +590,6 @@ class MainWindow(QtWidgets.QMainWindow):
         # Menu buttons on Left
         self.actions.tool = (
             open_,
-            #opendir,
-            openNextImg,
-            openPrevImg,
             showNextSlice,
             showLastSlice,
             save,
@@ -638,7 +622,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # Application state.
         self.image = QtGui.QImage()
-        self.imagePath = None
+        self.sourcePath = None
         self.recentFiles = []
         self.maxRecent = 7
         self.otherData = None
@@ -730,7 +714,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def setDirty(self):
         if self._config['auto_save'] or self.actions.saveAuto.isChecked():
-            label_file = osp.splitext(self.imagePath)[0] + '.json'
+            label_file = osp.splitext(self.sourcePath)[0] + '.json'
             if self.output_dir:
                 label_file_without_path = osp.basename(label_file)
                 label_file = osp.join(self.output_dir, label_file_without_path)
@@ -784,7 +768,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def resetState(self):
         self.labelList.clear()
         self.filename = None
-        self.imagePath = None
+        self.sourcePath = None
         self.imageData = None
         self.labelFile = None
         self.otherData = None
@@ -1119,24 +1103,20 @@ class MainWindow(QtWidgets.QMainWindow):
             flag = item.checkState() == Qt.Checked
             flags[key] = flag
         try:
-            imagePath = osp.relpath(
-                self.imagePath, osp.dirname(filename))
-            imageData = self.imageData if self._config['store_data'] else None
+            sourcePath = osp.relpath(
+                self.sourcePath, osp.dirname(filename))
             if osp.dirname(filename) and not osp.exists(osp.dirname(filename)):
                 os.makedirs(osp.dirname(filename))
             lf.save(
                 filename=filename,
                 shapes=shapes,
-                imagePath=imagePath,
-                #imageData=imageData,
-                imageHeight=self.image.height(),
-                imageWidth=self.image.width(),
+                sourcePath=sourcePath,
                 otherData=self.otherData,
                 flags=flags,
             )
             self.labelFile = lf
             items = self.fileListWidget.findItems(
-                self.imagePath, Qt.MatchExactly
+                self.sourcePath, Qt.MatchExactly
             )
             if len(items) > 0:
                 if len(items) != 1:
@@ -1321,8 +1301,13 @@ class MainWindow(QtWidgets.QMainWindow):
             self.labelFile = None
 
         # Load point cloud data and convert to Pixmaps
-        self.imageData, self.offset, self.scale = LabelFile.load_point_cloud_file(filename)
-        self.imagePath = filename
+        self.pointcloud = PointCloud(filename, render=False, max_points=500000)
+        self.scale, self.thickness = 0.02, 0.2
+        self.voxelgrid = VoxelGrid(self.pointcloud.points[['x', 'y', 'z']].values, (self.scale, self.scale, self.thickness))
+        self.offset = self.voxelgrid.min_corner()
+        self.imageData = self.make_images_from_voxel_grid()
+        self.sourcePath = filename
+        self.sliceIdx = 0
         image = QtGui.QImage.fromData(self.imageData[self.sliceIdx])
 
         if image.isNull():
@@ -1424,34 +1409,28 @@ class MainWindow(QtWidgets.QMainWindow):
         # ask the use for where to save the labels
         # self.settings.setValue('window/geometry', self.saveGeometry())
 
+    def make_images_from_voxel_grid(self, axis=2):
+        if self.voxelgrid is None:
+            print('No voxel grid built to make images from')
+            return
+        bitmaps = self.voxelgrid.bitmap2d(max=2048, axis=axis)
+        # Stack 3 copies on top of each other to form RGB image (but still black and white at this point)
+        for i in range(len(bitmaps)):
+            bitmaps[i] = np.dstack((bitmaps[i], bitmaps[i], bitmaps[i]))
+        data = []
+        for m in bitmaps:
+            img = PIL.Image.fromarray(np.asarray(np.clip(m, 0, 255), dtype="uint8"))
+            buff = BytesIO()
+            img.save(buff, format="JPEG")
+            buff.seek(0)
+            data.append(buff.read())
+        return data
+
     # User Dialogs #
 
     def loadRecent(self, filename):
         if self.mayContinue():
             self.loadFile(filename)
-
-    def openPrevImg(self, _value=False):
-        keep_prev = self._config['keep_prev']
-        if QtGui.QGuiApplication.keyboardModifiers() == \
-                (QtCore.Qt.ControlModifier | QtCore.Qt.ShiftModifier):
-            self._config['keep_prev'] = True
-
-        if not self.mayContinue():
-            return
-
-        if len(self.imageList) <= 0:
-            return
-
-        if self.filename is None:
-            return
-
-        currIndex = self.imageList.index(self.filename)
-        if currIndex - 1 >= 0:
-            filename = self.imageList[currIndex - 1]
-            if filename:
-                self.loadFile(filename)
-
-        self._config['keep_prev'] = keep_prev
 
     def showNextSlice(self, _value=False):
         if not self.imageData or len(self.imageData) <= 1:
@@ -1472,34 +1451,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self.image = QtGui.QImage.fromData(self.imageData[self.sliceIdx])
         self.canvas.loadPixmap(QtGui.QPixmap.fromImage(self.image))
         self.canvas.loadShapes(self.labelList.shapes)
-
-    def openNextImg(self, _value=False, load=True):
-        keep_prev = self._config['keep_prev']
-        if QtGui.QGuiApplication.keyboardModifiers() == \
-                (QtCore.Qt.ControlModifier | QtCore.Qt.ShiftModifier):
-            self._config['keep_prev'] = True
-
-        if not self.mayContinue():
-            return
-
-        if len(self.imageList) <= 0:
-            return
-
-        filename = None
-        if self.filename is None:
-            filename = self.imageList[0]
-        else:
-            currIndex = self.imageList.index(self.filename)
-            if currIndex + 1 < len(self.imageList):
-                filename = self.imageList[currIndex + 1]
-            else:
-                filename = self.imageList[-1]
-        self.filename = filename
-
-        if self.filename and load:
-            self.loadFile(self.filename)
-
-        self._config['keep_prev'] = keep_prev
 
     def openFile(self, _value=False):
         if not self.mayContinue():
