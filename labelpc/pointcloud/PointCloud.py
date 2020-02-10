@@ -4,10 +4,7 @@ import pandas as pd
 import pptk
 import os
 
-from data.Mask import Mask
-import algorithms.knn as knn
-import algorithms.Features as feat
-from data.Voxelize import VoxelGrid
+from labelpc.pointcloud.Mask import Mask
 
 
 class PointCloud:
@@ -344,34 +341,6 @@ class PointCloud:
         self.points.loc[mask.bools, 'class'] = cls
         self.render(showing=True)
 
-    def neighbors(self, k=100, highlight=True):
-        """
-        Find the centroid of the currently highlighted points and return a Mask indicating which points are neighbors.
-        :param k: Number of neighbors to find.
-        :param highlight: If True, then set the currently highlighted points to the neareest k neighbors. Default True.
-        :return: Return a copy of the mask indicating which points are neighbors of the selected point(s).
-        """
-        mask = self.select(showing=False, highlighted=True)
-        if not mask.count() or mask.count() == len(self.points):
-            print('No points were selected')
-            return
-
-        points = self.points.loc[mask.bools][['x', 'y', 'z']]
-        if len(points) == 1:
-            query = points
-        else:
-            query = np.average(points, axis=0)
-
-        if self.index is None:
-            self.index = knn.Query()
-            self.index.pptk(self.points.loc[self.showing.bools][['x', 'y', 'z']].values)
-
-        neighbors = self.index.neighbors(query, k)
-        mask.setr(neighbors)
-        if highlight:
-            self.highlight(mask)
-        return mask
-
     def rotate(self, points=None, degrees=0.0, axis=2):
         """
         This function takes in a list of points (or uses the currently rendered points) and returns a set of points that
@@ -424,19 +393,3 @@ class PointCloud:
         eigens.sort(axis=1)
         return eigens[:, 0] / eigens.sum(axis=1) * 3.0
 
-    def curvature_voxelized(self, points=None, mesh=0.05):
-        """
-        This function takes in a set of points (or uses the currently rendered points) and calculates the surface
-        curvature using PCA method and using voxelization as the neighbor calculation method. The mesh size parameter
-        (mesh) allows the user to adjust the spatial resolution of the computation. If render=True, then the results
-        will be rendered upon completion.
-        """
-        if points is None:
-            points = self.points.loc[self.showing.bools][['x', 'y', 'z']].values
-
-        vg = VoxelGrid(points, mesh_size=mesh)
-        curvs = np.zeros(len(points))
-        for indices in vg.indices():
-            curvs[indices] = feat.curvature_from_eigenvalues(feat.eigenvalues_single(points[indices]))
-
-        return curvs
