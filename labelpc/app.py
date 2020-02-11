@@ -1074,8 +1074,8 @@ class MainWindow(QtWidgets.QMainWindow):
                 shape_type=shape_type,
                 group_id=group_id,
             )
-            for x, y in points:
-                shape.addPoint((QtCore.QPointF(x, y) - self.offset) / self.scale)
+            for p in points:
+                shape.addPoint(self.pointcloudToQpoint(p))
             shape.close()
 
             default_flags = {}
@@ -1104,7 +1104,7 @@ class MainWindow(QtWidgets.QMainWindow):
         def format_shape(s):
             return dict(
                 label=s.label.encode('utf-8') if PY2 else s.label,
-                points=[(p.x()*self.scale+self.offset.x(), p.y()*self.scale+self.offset.y()) for p in s.points],
+                points=[self.qpointToPointcloud(p) for p in s.points],
                 group_id=s.group_id,
                 shape_type=s.shape_type,
                 flags=s.flags
@@ -1319,8 +1319,8 @@ class MainWindow(QtWidgets.QMainWindow):
         max_points, result = QInputDialog.getText(self, "Max Points", "Input the max points")
         self.scale, result = QInputDialog.getText(self, "Mesh Size", "Input the mesh size")
         self.thickness, result = QInputDialog.getText(self, "Mesh Size", "Input the mesh size")
+        max_points, self.scale, self.thickness = int(max_points), float(self.scale), float(self.thickness)
         self.pointcloud = PointCloud(filename, render=False, max_points=max_points)
-        self.scale, self.thickness = 0.02, 0.2
         self.voxelgrid = VoxelGrid(self.pointcloud.points[['x', 'y', 'z']].values, (self.scale, self.scale, self.thickness))
         offx, offy = self.voxelgrid.min_corner()[:2]
         self.offset = QtCore.QPointF(offx, offy)
@@ -1451,12 +1451,12 @@ class MainWindow(QtWidgets.QMainWindow):
         for s in self.labelList.shapes:
             if s.label[:4] == 'wall' and s.shape_type == 'polygon':
                 points = [(p.x(), p.y()) for p in s.points]
-                angle = -align_room_by_walls_polygon(points)
+                angle = align_room_by_walls_polygon(points)
                 break
         if angle is None:
             return
 
-        self.pointcloud.points[['x', 'y', 'z']] = self.pointcloud.rotate(degrees=angle)
+        self.pointcloud.points[['x', 'y', 'z']] = self.pointcloud.rotate(degrees=-angle)
         self.pointcloud.write(self.pointcloud.filename, overwrite=True)
         print(angle)
         self.rotateShapes(angle)
@@ -1467,8 +1467,16 @@ class MainWindow(QtWidgets.QMainWindow):
         self.setDirty()
 
     def render3d(self):
-        self.pointcloud.render_flag = True
-        self.pointcloud.render()
+        if not self.pptkViewerReady():
+            self.pointcloud.render_flag = True
+            self.pointcloud.viewer = None
+            self.pointcloud.render()
+
+    def qpointToPointcloud(self, p):
+        return (p.x() * self.scale + self.offset.x(), p.y() * self.scale + self.offset.y())
+
+    def pointcloudToQpoint(self, p):
+        return (QtCore.QPointF(p[0], p[1]) - self.offset) / self.scale
 
     def highlightWalls(self):
         walls = []
@@ -1691,6 +1699,15 @@ class MainWindow(QtWidgets.QMainWindow):
             self.saveFile()
             return True
         else:  # answer == mb.Cancel
+            return False
+
+    def pptkViewerReady(self):
+        if not self.pointcloud.render_flag or self.pointcloud.viewer is None:
+            return False
+        try:
+            self.pointcloud.viewer.get('lookat')
+            return True
+        except ConnectionRefusedError:
             return False
 
     def errorMessage(self, title, message):

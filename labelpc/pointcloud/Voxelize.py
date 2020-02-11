@@ -235,15 +235,15 @@ class VoxelGrid:
             return bitmap
 
     def bitmap2d(self, max=None, axis=2):
-        map = self.bitmap3d(max, swapaxes=False)
+        map = self.bitmap3d(max)
         maps = []
-        for i in range(map.shape[axis]):
+        for i in range(map.shape[2-axis]):
             if axis == 0:
-                maps.append(map[i, :, :])
+                maps.append(map[:, :, i])
             elif axis == 1:
                 maps.append(map[:, i, :])
             elif axis == 2:
-                maps.append(map[:, :, i])
+                maps.append(map[i, :, :])
             else:
                 print('Invalid axis choice')
                 return []
