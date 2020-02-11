@@ -274,6 +274,12 @@ class MainWindow(QtWidgets.QMainWindow):
         close = action('&Close', self.closeFile, shortcuts['close'], 'close',
                        'Close current file')
 
+        align_room = action('Align Room', self.alignRoom, '', 'align', 'Align the room using walls')
+
+        render_3d = action('Render points in 3D', self.render3d, '', 'render', 'Render the points in 3D')
+
+        highlight_walls = action('Highlight walls', self.highlightWalls, '', 'highlight', 'Highlight walls')
+
         toggle_keep_prev_mode = action(
             self.tr('Keep Previous Annotation'),
             self.toggleKeepPrevMode,
@@ -472,7 +478,9 @@ class MainWindow(QtWidgets.QMainWindow):
             fitWindow=fitWindow, fitWidth=fitWidth,
             zoomActions=zoomActions,
             showNextSlice=showNextSlice, showLastSlice=showLastSlice,
-            openNextImg=openNextImg, openPrevImg=openPrevImg,
+            alignRoom=align_room,
+            render3d=render_3d,
+            highlightWalls=highlight_walls,
             #fileMenuActions=(open_, opendir, save, saveAs, close, quit),
             fileMenuActions=(open_, save, saveAs, close, quit),
             tool=(),
@@ -510,6 +518,9 @@ class MainWindow(QtWidgets.QMainWindow):
                 close,
                 showNextSlice,
                 showLastSlice,
+                align_room,
+                render_3d,
+                highlight_walls,
                 createMode,
                 createRectangleMode,
                 createCircleMode,
@@ -607,6 +618,9 @@ class MainWindow(QtWidgets.QMainWindow):
             zoomOut,
             fitWindow,
             fitWidth,
+            align_room,
+            render_3d,
+            highlight_walls,
         )
 
         self.statusBar().showMessage(self.tr('%s started.') % __appname__)
@@ -1061,7 +1075,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 group_id=group_id,
             )
             for x, y in points:
-                shape.addPoint(QtCore.QPointF((x-self.offset[0]) / self.scale, (y-self.offset[1]) / self.scale))
+                shape.addPoint((QtCore.QPointF(x, y) - self.offset) / self.scale)
             shape.close()
 
             default_flags = {}
@@ -1090,7 +1104,7 @@ class MainWindow(QtWidgets.QMainWindow):
         def format_shape(s):
             return dict(
                 label=s.label.encode('utf-8') if PY2 else s.label,
-                points=[(p.x()*self.scale+self.offset[0], p.y()*self.scale+self.offset[1]) for p in s.points],
+                points=[(p.x()*self.scale+self.offset.x(), p.y()*self.scale+self.offset.y()) for p in s.points],
                 group_id=s.group_id,
                 shape_type=s.shape_type,
                 flags=s.flags
@@ -1308,7 +1322,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.pointcloud = PointCloud(filename, render=False, max_points=max_points)
         self.scale, self.thickness = 0.02, 0.2
         self.voxelgrid = VoxelGrid(self.pointcloud.points[['x', 'y', 'z']].values, (self.scale, self.scale, self.thickness))
-        self.offset = self.voxelgrid.min_corner()
+        offx, offy = self.voxelgrid.min_corner()[:2]
+        self.offset = QtCore.QPointF(offx, offy)
         self.imageData = self.make_images_from_voxel_grid()
         self.sourcePath = filename
         self.sliceIdx = 0
@@ -1429,6 +1444,37 @@ class MainWindow(QtWidgets.QMainWindow):
             buff.seek(0)
             data.append(buff.read())
         return data
+
+    def alignRoom(self):
+        angle = None
+        from labelpc.pointcloud.Proprietary import align_room_by_walls_polygon
+        for s in self.labelList.shapes:
+            if s.label[:4] == 'wall' and s.shape_type == 'polygon':
+                points = [(p.x(), p.y()) for p in s.points]
+                angle = -align_room_by_walls_polygon(points)
+                break
+        if angle is None:
+            return
+
+        self.pointcloud.points[['x', 'y', 'z']] = self.pointcloud.rotate(degrees=angle)
+        self.pointcloud.write(self.pointcloud.filename, overwrite=True)
+        print(angle)
+        self.rotateShapes(angle)
+
+    def rotateShapes(self, angle):
+        for shape in self.canvas.shapes:
+            shape.rotateBy(angle, self.offset, self.scale)
+        self.setDirty()
+
+    def render3d(self):
+        self.pointcloud.render_flag = True
+        self.pointcloud.render()
+
+    def highlightWalls(self):
+        walls = []
+        for s in self.labelList.shapes:
+            if s.label[:4] == 'wall':
+                walls.append([(s.points[0].x(), s.points[0].y()), (s.points[1].x(), s.points[1].y())])
 
     # User Dialogs #
 
