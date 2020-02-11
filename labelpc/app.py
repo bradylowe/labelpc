@@ -11,6 +11,7 @@ from qtpy import QtCore
 from qtpy.QtCore import Qt
 from qtpy import QtGui
 from qtpy import QtWidgets
+from PyQt5.QtWidgets import QInputDialog
 
 from labelpc import __appname__
 from labelpc import PY2
@@ -1321,7 +1322,9 @@ class MainWindow(QtWidgets.QMainWindow):
             self.labelFile = None
 
         # Load point cloud data and convert to Pixmaps
-        self.imageData, self.offset, self.scale = LabelFile.load_point_cloud_file(filename)
+        points, result = QInputDialog.getText(self, "Max Points", "Input the max points")
+        meshSize, result = QInputDialog.getText(self, "Mesh Size", "Input the mesh size")
+        self.imageData, self.offset, self.scale = LabelFile.load_point_cloud_file(filename, max_points=int(str(points)), mesh=float(str(meshSize)))
         self.imagePath = filename
         image = QtGui.QImage.fromData(self.imageData[self.sliceIdx])
 
