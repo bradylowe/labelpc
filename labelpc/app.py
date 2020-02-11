@@ -15,6 +15,7 @@ from qtpy import QtCore
 from qtpy.QtCore import Qt
 from qtpy import QtGui
 from qtpy import QtWidgets
+from PyQt5.QtWidgets import QInputDialog
 
 from labelpc import __appname__
 from labelpc import PY2
@@ -1301,7 +1302,10 @@ class MainWindow(QtWidgets.QMainWindow):
             self.labelFile = None
 
         # Load point cloud data and convert to Pixmaps
-        self.pointcloud = PointCloud(filename, render=False, max_points=500000)
+        max_points, result = QInputDialog.getText(self, "Max Points", "Input the max points")
+        self.scale, result = QInputDialog.getText(self, "Mesh Size", "Input the mesh size")
+        self.thickness, result = QInputDialog.getText(self, "Mesh Size", "Input the mesh size")
+        self.pointcloud = PointCloud(filename, render=False, max_points=max_points)
         self.scale, self.thickness = 0.02, 0.2
         self.voxelgrid = VoxelGrid(self.pointcloud.points[['x', 'y', 'z']].values, (self.scale, self.scale, self.thickness))
         self.offset = self.voxelgrid.min_corner()
