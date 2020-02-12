@@ -643,6 +643,11 @@ class MainWindow(QtWidgets.QMainWindow):
         self.otherData = None
         self.zoom_level = 100
         self.fit_window = False
+        self.max_points = None
+        self.scale = None
+        self.thickness = None
+        self.offset = None
+        self.pointcloud = None
         self.zoom_values = {}  # key=filename, value=(zoom_mode, zoom_value)
         self.scroll_values = {
             Qt.Horizontal: {},
@@ -787,6 +792,11 @@ class MainWindow(QtWidgets.QMainWindow):
         self.imageData = None
         self.labelFile = None
         self.otherData = None
+        self.max_points = None
+        self.thickness = None
+        self.scale = None
+        self.offset = None
+        self.pointcloud = None
         self.canvas.resetState()
 
     def currentItem(self):
@@ -1281,6 +1291,31 @@ class MainWindow(QtWidgets.QMainWindow):
             return
 
         self.resetState()
+        self.load_point_cloud(filename)
+        self.load_labels_file(filename)
+
+        # set zoom values
+        is_initial_load = not self.zoom_values
+        if self.filename in self.zoom_values:
+            self.zoomMode = self.zoom_values[self.filename][0]
+            self.setZoom(self.zoom_values[self.filename][1])
+        elif is_initial_load or not self._config['keep_prev_scale']:
+            self.adjustScale(initial=True)
+        # set scroll values
+        for orientation in self.scroll_values:
+            if self.filename in self.scroll_values[orientation]:
+                self.setScroll(
+                    orientation, self.scroll_values[orientation][self.filename]
+                )
+        self.paintCanvas()
+        self.addRecentFile(self.filename)
+        self.toggleActions(True)
+        self.status(self.tr("Loaded %s") % osp.basename(str(filename)))
+        return True
+
+    def load_point_cloud(self, filename):
+        if self.pointcloud is not None:
+            del self.pointcloud
         self.canvas.setEnabled(False)
         if filename is None:
             filename = self.settings.value('filename', '')
@@ -1291,7 +1326,41 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.tr('No such file: <b>%s</b>') % filename
             )
             return False
-        # assumes same name, but json extension
+
+        if self.max_points is None:
+            self.max_points, result = QInputDialog.getText(self, "Max Points", "Input the max points")
+            self.scale, result = QInputDialog.getText(self, "Mesh Size", "Input the mesh size")
+            self.thickness, result = QInputDialog.getText(self, "Mesh Size", "Input the mesh size")
+            self.max_points, self.scale, self.thickness = int(self.max_points), float(self.scale), float(self.thickness)
+        self.pointcloud = PointCloud(filename, render=False, max_points=self.max_points)
+        self.voxelgrid = VoxelGrid(self.pointcloud.points[['x', 'y', 'z']].values, (self.scale, self.scale, self.thickness))
+        offx, offy = self.voxelgrid.min_corner()[:2]
+        self.offset = QtCore.QPointF(offx, offy)
+        self.imageData = self.make_images_from_voxel_grid()
+        self.sourcePath = filename
+        self.sliceIdx = 0
+        image = QtGui.QImage.fromData(self.imageData[self.sliceIdx])
+
+        if image.isNull():
+            formats = ['*.{}'.format(fmt.data().decode())
+                       for fmt in QtGui.QImageReader.supportedImageFormats()]
+            self.errorMessage(
+                self.tr('Error opening file'),
+                self.tr(
+                    '<p>Make sure <i>{0}</i> is a valid image file.<br/>'
+                    'Supported image formats: {1}</p>'
+                ).format(filename, ','.join(formats))
+            )
+            self.status(self.tr("Error reading %s") % filename)
+            return False
+
+        self.image = image
+        self.filename = filename
+        self.canvas.loadPixmap(QtGui.QPixmap.fromImage(image))
+        self.canvas.setEnabled(True)
+
+    def load_labels_file(self, filename):
+        self.canvas.setEnabled(False)
         self.status(self.tr("Loading %s...") % osp.basename(str(filename)))
         label_file = osp.splitext(filename)[0] + '.json'
         if self.output_dir:
@@ -1315,37 +1384,8 @@ class MainWindow(QtWidgets.QMainWindow):
         else:
             self.labelFile = None
 
-        # Load point cloud data and convert to Pixmaps
-        max_points, result = QInputDialog.getText(self, "Max Points", "Input the max points")
-        self.scale, result = QInputDialog.getText(self, "Mesh Size", "Input the mesh size")
-        self.thickness, result = QInputDialog.getText(self, "Mesh Size", "Input the mesh size")
-        max_points, self.scale, self.thickness = int(max_points), float(self.scale), float(self.thickness)
-        self.pointcloud = PointCloud(filename, render=False, max_points=max_points)
-        self.voxelgrid = VoxelGrid(self.pointcloud.points[['x', 'y', 'z']].values, (self.scale, self.scale, self.thickness))
-        offx, offy = self.voxelgrid.min_corner()[:2]
-        self.offset = QtCore.QPointF(offx, offy)
-        self.imageData = self.make_images_from_voxel_grid()
-        self.sourcePath = filename
-        self.sliceIdx = 0
-        image = QtGui.QImage.fromData(self.imageData[self.sliceIdx])
-
-        if image.isNull():
-            formats = ['*.{}'.format(fmt.data().decode())
-                       for fmt in QtGui.QImageReader.supportedImageFormats()]
-            self.errorMessage(
-                self.tr('Error opening file'),
-                self.tr(
-                    '<p>Make sure <i>{0}</i> is a valid image file.<br/>'
-                    'Supported image formats: {1}</p>'
-                ).format(filename, ','.join(formats))
-            )
-            self.status(self.tr("Error reading %s") % filename)
-            return False
-        self.image = image
-        self.filename = filename
         if self._config['keep_prev']:
             prev_shapes = self.canvas.shapes
-        self.canvas.loadPixmap(QtGui.QPixmap.fromImage(image))
         if self._config['flags']:
             self.loadFlags({k: False for k in self._config['flags']})
         if self.labelFile:
@@ -1358,24 +1398,6 @@ class MainWindow(QtWidgets.QMainWindow):
         else:
             self.setClean()
         self.canvas.setEnabled(True)
-        # set zoom values
-        is_initial_load = not self.zoom_values
-        if self.filename in self.zoom_values:
-            self.zoomMode = self.zoom_values[self.filename][0]
-            self.setZoom(self.zoom_values[self.filename][1])
-        elif is_initial_load or not self._config['keep_prev_scale']:
-            self.adjustScale(initial=True)
-        # set scroll values
-        for orientation in self.scroll_values:
-            if self.filename in self.scroll_values[orientation]:
-                self.setScroll(
-                    orientation, self.scroll_values[orientation][self.filename]
-                )
-        self.paintCanvas()
-        self.addRecentFile(self.filename)
-        self.toggleActions(True)
-        self.status(self.tr("Loaded %s") % osp.basename(str(filename)))
-        return True
 
     def resizeEvent(self, event):
         if self.canvas and not self.image.isNull()\
