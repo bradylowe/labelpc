@@ -557,6 +557,8 @@ class Canvas(QtWidgets.QWidget):
 
     def finalise(self):
         assert self.current
+        if self.current.shape_type == 'rectangle':
+            self.current = Shape.rectangleToPolygon(self.current)
         self.current.close()
         self.shapes.append(self.current)
         self.storeShapes()

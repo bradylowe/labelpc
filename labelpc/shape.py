@@ -249,6 +249,19 @@ class Shape(object):
     def highlightClear(self):
         self._highlightIndex = None
 
+    @staticmethod
+    def rectangleToPolygon(square):
+        square.shape_type = 'polygon'
+        p1, p2 = square.points
+        x1, y1 = p1.x(), p1.y()
+        x2, y2 = p2.x(), p2.y()
+        square.points = []
+        square.addPoint(QtCore.QPointF(x1, y1))
+        square.addPoint(QtCore.QPointF(x1, y2))
+        square.addPoint(QtCore.QPointF(x2, y2))
+        square.addPoint(QtCore.QPointF(x2, y1))
+        return square
+
     def copy(self):
         return copy.deepcopy(self)
 
