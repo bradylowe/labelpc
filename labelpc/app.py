@@ -1451,20 +1451,25 @@ class MainWindow(QtWidgets.QMainWindow):
         for s in self.labelList.shapes:
             if s.label[:4] == 'wall' and s.shape_type == 'polygon':
                 points = [(p.x(), p.y()) for p in s.points]
-                angle = align_room_by_walls_polygon(points)
+                angle = -align_room_by_walls_polygon(points)
                 break
         if angle is None:
             return
 
-        self.pointcloud.points[['x', 'y', 'z']] = self.pointcloud.rotate(degrees=-angle)
+        self.pointcloud.points[['x', 'y', 'z']] = self.pointcloud.rotate(degrees=angle)
         self.pointcloud.write(self.pointcloud.filename, overwrite=True)
-        print(angle)
         self.rotateShapes(angle)
+        self.setDirty()
 
     def rotateShapes(self, angle):
-        for shape in self.canvas.shapes:
-            shape.rotateBy(angle, self.offset, self.scale)
-        self.setDirty()
+        theta = np.radians(angle)
+        c, s = np.cos(theta), np.sin(theta)
+        rot = np.array(((c, -s), (s, c)))
+        for s, shape in enumerate(self.canvas.shapes):
+            for p, point in enumerate(shape.points):
+                trans = self.qpointToPointcloud(point)
+                trans = np.dot(trans, rot)
+                self.canvas.shapes[s].points[p] = self.pointcloudToQpoint(trans)
 
     def render3d(self):
         if not self.pptkViewerReady():
@@ -1473,10 +1478,12 @@ class MainWindow(QtWidgets.QMainWindow):
             self.pointcloud.render()
 
     def qpointToPointcloud(self, p):
-        return (p.x() * self.scale + self.offset.x(), p.y() * self.scale + self.offset.y())
+        return (p.x() * self.scale + self.offset.x(), (self.canvas.pixmap.height() - p.y()) * self.scale + self.offset.y())
 
     def pointcloudToQpoint(self, p):
-        return (QtCore.QPointF(p[0], p[1]) - self.offset) / self.scale
+        x = (p[0] - self.offset.x()) / self.scale
+        y = self.canvas.pixmap.height() - ((p[1] - self.offset.y()) / self.scale)
+        return QtCore.QPointF(x, y)
 
     def highlightWalls(self):
         walls = []

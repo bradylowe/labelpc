@@ -239,16 +239,6 @@ class Shape(object):
     def moveBy(self, offset):
         self.points = [p + offset for p in self.points]
 
-    def rotateBy(self, angle, offset, scale):
-        self.points = [p * scale + offset for p in self.points]
-        theta = np.radians(angle)
-        c, s = np.cos(theta), np.sin(theta)
-        for i in range(len(self.points)):
-            x = c * self.points[i].x() - s * self.points[i].y()
-            y = s * self.points[i].x() + c * self.points[i].y()
-            self.points[i] = QtCore.QPointF(x, y)
-        self.points = [(p - offset) / scale for p in self.points]
-
     def moveVertexBy(self, i, offset):
         self.points[i] = self.points[i] + offset
 

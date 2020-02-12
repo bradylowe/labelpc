@@ -49,7 +49,7 @@ class VoxelGrid:
     def index(self, point):
         """
         This function calculates the voxel index (xidx, yidx, zidx) of the input point. Note that the indices could
-        be negative if the input point is below or left of the original point cloud
+        be negative if the input point is below or left of the origin.
         :param point: Point of interest whose voxel indices to be calculated.
         :return: xidx, yidx, zidx (the 3D indices of the voxel containing the point).
         """
@@ -226,7 +226,7 @@ class VoxelGrid:
         bitmap = np.zeros(range_idx, dtype=int)
         for v in self.occupied():
             i, j, k = np.array(v) - min_idx
-            bitmap[i][j][k] = self.counts(v)
+            bitmap[i][range_idx[1] - j - 1][k] = self.counts(v)
         if max is not None:
             bitmap = (bitmap * max / bitmap.max()).astype(int)
         if swapaxes:
