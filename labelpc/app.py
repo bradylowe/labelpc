@@ -1352,10 +1352,6 @@ class MainWindow(QtWidgets.QMainWindow):
             return False
 
         if self.max_points is None:
-            # self.max_points, result = QInputDialog.getText(self, "Max Points", "Input the max points")
-            # self.scale, result = QInputDialog.getText(self, "Mesh Size", "Input the mesh size")
-            # self.thickness, result = QInputDialog.getText(self, "Mesh Size", "Input the mesh size")
-            # self.max_points, self.scale, self.thickness = int(self.max_points), float(self.scale), float(self.thickness)
             dialog = InputDialog()
             if dialog.exec():
                 self.max_points, self.scale, self.thickness = dialog.getInputs()
