@@ -15,7 +15,7 @@ from qtpy import QtCore
 from qtpy.QtCore import Qt
 from qtpy import QtGui
 from qtpy import QtWidgets
-from PyQt5.QtWidgets import QInputDialog
+from PyQt5.QtWidgets import QInputDialog, QDialog, QLineEdit, QDialogButtonBox, QFormLayout
 
 from labelpc import __appname__
 from labelpc import PY2
@@ -52,6 +52,30 @@ from labelpc.pointcloud.Voxelize import VoxelGrid
 
 LABEL_COLORMAP = imgviz.label_colormap(value=200)
 
+class InputDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+
+        self.maxPoints = QLineEdit(self)
+        self.meshSize = QLineEdit(self)
+        self.thickness = QLineEdit(self)
+        self.maxPoints.setText("500000")
+        self.meshSize.setText("0.02")
+        self.thickness.setText("0.2")
+        buttonBox = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel, self);
+
+        layout = QFormLayout(self)
+        layout.addRow("Max Points", self.maxPoints)
+        layout.addRow("Mesh Size", self.meshSize)
+        layout.addRow("Thickness", self.thickness)
+        layout.addWidget(buttonBox)
+
+
+        buttonBox.accepted.connect(self.accept)
+        buttonBox.rejected.connect(self.reject)
+
+    def getInputs(self):
+        return (int(self.maxPoints.text()), float(self.meshSize.text()), float(self.thickness.text()))
 
 class MainWindow(QtWidgets.QMainWindow):
 
@@ -1328,10 +1352,13 @@ class MainWindow(QtWidgets.QMainWindow):
             return False
 
         if self.max_points is None:
-            self.max_points, result = QInputDialog.getText(self, "Max Points", "Input the max points")
-            self.scale, result = QInputDialog.getText(self, "Mesh Size", "Input the mesh size")
-            self.thickness, result = QInputDialog.getText(self, "Mesh Size", "Input the mesh size")
-            self.max_points, self.scale, self.thickness = int(self.max_points), float(self.scale), float(self.thickness)
+            # self.max_points, result = QInputDialog.getText(self, "Max Points", "Input the max points")
+            # self.scale, result = QInputDialog.getText(self, "Mesh Size", "Input the mesh size")
+            # self.thickness, result = QInputDialog.getText(self, "Mesh Size", "Input the mesh size")
+            # self.max_points, self.scale, self.thickness = int(self.max_points), float(self.scale), float(self.thickness)
+            dialog = InputDialog()
+            if dialog.exec():
+                self.max_points, self.scale, self.thickness = dialog.getInputs()
         self.pointcloud = PointCloud(filename, render=False, max_points=self.max_points)
         self.voxelgrid = VoxelGrid(self.pointcloud.points[['x', 'y', 'z']].values, (self.scale, self.scale, self.thickness))
         offx, offy = self.voxelgrid.min_corner()[:2]
