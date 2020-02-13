@@ -352,6 +352,14 @@ class MainWindow(QtWidgets.QMainWindow):
             self.tr('Start drawing points'),
             enabled=False,
         )
+        createPoleMode = action(
+            self.tr('Create Pole'),
+            lambda: self.toggleDrawMode(False, createMode='point'),
+            shortcuts['create_pole'],
+            'objects',
+            self.tr('Start drawing poles'),
+            enabled=False,
+        )
         createLineStripMode = action(
             self.tr('Create LineStrip'),
             lambda: self.toggleDrawMode(False, createMode='linestrip'),
@@ -497,6 +505,7 @@ class MainWindow(QtWidgets.QMainWindow):
             createCircleMode=createCircleMode,
             createLineMode=createLineMode,
             createPointMode=createPointMode,
+            createPoleMode=createPoleMode,
             createLineStripMode=createLineStripMode,
             zoom=zoom, zoomIn=zoomIn, zoomOut=zoomOut, zoomOrg=zoomOrg,
             fitWindow=fitWindow, fitWidth=fitWidth,
@@ -528,6 +537,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 createCircleMode,
                 createLineMode,
                 createPointMode,
+                createPoleMode,
                 createLineStripMode,
                 editMode,
                 edit,
@@ -550,6 +560,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 createCircleMode,
                 createLineMode,
                 createPointMode,
+                createPoleMode,
                 createLineStripMode,
                 editMode,
             ),
@@ -751,6 +762,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.actions.createCircleMode,
             self.actions.createLineMode,
             self.actions.createPointMode,
+            self.actions.createPoleMode,
             self.actions.createLineStripMode,
             self.actions.editMode,
         )
@@ -868,6 +880,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.actions.createLineMode.setEnabled(True)
             self.actions.createPointMode.setEnabled(True)
             self.actions.createLineStripMode.setEnabled(True)
+            self.actions.createPoleMode.setEnabled(True)
         else:
             if createMode == 'polygon':
                 self.actions.createMode.setEnabled(False)
@@ -876,6 +889,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.actions.createLineMode.setEnabled(True)
                 self.actions.createPointMode.setEnabled(True)
                 self.actions.createLineStripMode.setEnabled(True)
+                self.actions.createPoleMode.setEnabled(True)
             elif createMode == 'rectangle':
                 self.actions.createMode.setEnabled(True)
                 self.actions.createRectangleMode.setEnabled(False)
@@ -883,6 +897,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.actions.createLineMode.setEnabled(True)
                 self.actions.createPointMode.setEnabled(True)
                 self.actions.createLineStripMode.setEnabled(True)
+                self.actions.createPoleMode.setEnabled(True)
             elif createMode == 'line':
                 self.actions.createMode.setEnabled(True)
                 self.actions.createRectangleMode.setEnabled(True)
@@ -890,6 +905,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.actions.createLineMode.setEnabled(False)
                 self.actions.createPointMode.setEnabled(True)
                 self.actions.createLineStripMode.setEnabled(True)
+                self.actions.createPoleMode.setEnabled(True)
             elif createMode == 'point':
                 self.actions.createMode.setEnabled(True)
                 self.actions.createRectangleMode.setEnabled(True)
@@ -897,6 +913,15 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.actions.createLineMode.setEnabled(True)
                 self.actions.createPointMode.setEnabled(False)
                 self.actions.createLineStripMode.setEnabled(True)
+                self.actions.createPoleMode.setEnabled(True)
+            elif createMode == 'pole':
+                self.actions.createMode.setEnabled(True)
+                self.actions.createRectangleMode.setEnabled(True)
+                self.actions.createCircleMode.setEnabled(True)
+                self.actions.createLineMode.setEnabled(True)
+                self.actions.createPointMode.setEnabled(True)
+                self.actions.createLineStripMode.setEnabled(True)
+                self.actions.createPoleMode.setEnabled(False)
             elif createMode == "circle":
                 self.actions.createMode.setEnabled(True)
                 self.actions.createRectangleMode.setEnabled(True)
@@ -904,6 +929,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.actions.createLineMode.setEnabled(True)
                 self.actions.createPointMode.setEnabled(True)
                 self.actions.createLineStripMode.setEnabled(True)
+                self.actions.createPoleMode.setEnabled(True)
             elif createMode == "linestrip":
                 self.actions.createMode.setEnabled(True)
                 self.actions.createRectangleMode.setEnabled(True)
@@ -911,6 +937,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.actions.createLineMode.setEnabled(True)
                 self.actions.createPointMode.setEnabled(True)
                 self.actions.createLineStripMode.setEnabled(False)
+                self.actions.createPoleMode.setEnabled(True)
             else:
                 raise ValueError('Unsupported createMode: %s' % createMode)
         self.actions.editMode.setEnabled(not edit)
@@ -1218,7 +1245,9 @@ class MainWindow(QtWidgets.QMainWindow):
             text = items[0].data(Qt.UserRole)
         flags = {}
         group_id = None
-        if self._config['display_label_popup'] or not text:
+        if self.actions.createPoleMode.isEnabled() == True:
+            text = "Pole"
+        elif self._config['display_label_popup'] or not text:
             previous_text = self.labelDialog.edit.text()
             text, flags, group_id = self.labelDialog.popUp(text)
             if not text:
