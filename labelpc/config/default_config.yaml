@@ -78,6 +78,7 @@ shortcuts:
   create_line: null
   create_point: null
   create_pole: null
+  create_beam: null
   create_linestrip: null
   edit_polygon: Ctrl+J
   delete_polygon: Delete

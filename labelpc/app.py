@@ -353,11 +353,19 @@ class MainWindow(QtWidgets.QMainWindow):
             enabled=False,
         )
         createPoleMode = action(
-            self.tr('Create Pole'),
+            self.tr('Annotate Poles'),
             lambda: self.toggleDrawMode(False, createMode='point'),
             shortcuts['create_pole'],
             'objects',
-            self.tr('Start drawing poles'),
+            self.tr('Start annotating poles'),
+            enabled=False,
+        )
+        createBeamMode = action(
+            self.tr('Annotate Beams'),
+            lambda: self.toggleDrawMode(False, createMode='point'),
+            shortcuts['create_pole'],
+            'objects',
+            self.tr('Start annotating beams'),
             enabled=False,
         )
         createLineStripMode = action(
@@ -506,6 +514,7 @@ class MainWindow(QtWidgets.QMainWindow):
             createLineMode=createLineMode,
             createPointMode=createPointMode,
             createPoleMode=createPoleMode,
+            createBeamMode=createBeamMode,
             createLineStripMode=createLineStripMode,
             zoom=zoom, zoomIn=zoomIn, zoomOut=zoomOut, zoomOrg=zoomOrg,
             fitWindow=fitWindow, fitWidth=fitWidth,
@@ -538,6 +547,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 createLineMode,
                 createPointMode,
                 createPoleMode,
+                createBeamMode,
                 createLineStripMode,
                 editMode,
                 edit,
@@ -561,6 +571,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 createLineMode,
                 createPointMode,
                 createPoleMode,
+                createBeamMode,
                 createLineStripMode,
                 editMode,
             ),
@@ -763,6 +774,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.actions.createLineMode,
             self.actions.createPointMode,
             self.actions.createPoleMode,
+            self.actions.createBeamMode,
             self.actions.createLineStripMode,
             self.actions.editMode,
         )
@@ -881,6 +893,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.actions.createPointMode.setEnabled(True)
             self.actions.createLineStripMode.setEnabled(True)
             self.actions.createPoleMode.setEnabled(True)
+            self.actions.createBeamMode.setEnabled(True)
         else:
             if createMode == 'polygon':
                 self.actions.createMode.setEnabled(False)
@@ -890,6 +903,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.actions.createPointMode.setEnabled(True)
                 self.actions.createLineStripMode.setEnabled(True)
                 self.actions.createPoleMode.setEnabled(True)
+                self.actions.createBeamMode.setEnabled(True)
             elif createMode == 'rectangle':
                 self.actions.createMode.setEnabled(True)
                 self.actions.createRectangleMode.setEnabled(False)
@@ -898,6 +912,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.actions.createPointMode.setEnabled(True)
                 self.actions.createLineStripMode.setEnabled(True)
                 self.actions.createPoleMode.setEnabled(True)
+                self.actions.createBeamMode.setEnabled(True)
             elif createMode == 'line':
                 self.actions.createMode.setEnabled(True)
                 self.actions.createRectangleMode.setEnabled(True)
@@ -906,6 +921,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.actions.createPointMode.setEnabled(True)
                 self.actions.createLineStripMode.setEnabled(True)
                 self.actions.createPoleMode.setEnabled(True)
+                self.actions.createBeamMode.setEnabled(True)
             elif createMode == 'point':
                 self.actions.createMode.setEnabled(True)
                 self.actions.createRectangleMode.setEnabled(True)
@@ -914,6 +930,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.actions.createPointMode.setEnabled(False)
                 self.actions.createLineStripMode.setEnabled(True)
                 self.actions.createPoleMode.setEnabled(True)
+                self.actions.createBeamMode.setEnabled(True)
             elif createMode == 'pole':
                 self.actions.createMode.setEnabled(True)
                 self.actions.createRectangleMode.setEnabled(True)
@@ -922,6 +939,16 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.actions.createPointMode.setEnabled(True)
                 self.actions.createLineStripMode.setEnabled(True)
                 self.actions.createPoleMode.setEnabled(False)
+                self.actions.createBeamMode.setEnabled(True)
+            elif createMode == 'beam':
+                self.actions.createMode.setEnabled(True)
+                self.actions.createRectangleMode.setEnabled(True)
+                self.actions.createCircleMode.setEnabled(True)
+                self.actions.createLineMode.setEnabled(True)
+                self.actions.createPointMode.setEnabled(True)
+                self.actions.createLineStripMode.setEnabled(True)
+                self.actions.createPoleMode.setEnabled(True)
+                self.actions.createBeamMode.setEnabled(False)
             elif createMode == "circle":
                 self.actions.createMode.setEnabled(True)
                 self.actions.createRectangleMode.setEnabled(True)
@@ -930,6 +957,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.actions.createPointMode.setEnabled(True)
                 self.actions.createLineStripMode.setEnabled(True)
                 self.actions.createPoleMode.setEnabled(True)
+                self.actions.createBeamMode.setEnabled(True)
             elif createMode == "linestrip":
                 self.actions.createMode.setEnabled(True)
                 self.actions.createRectangleMode.setEnabled(True)
@@ -938,6 +966,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.actions.createPointMode.setEnabled(True)
                 self.actions.createLineStripMode.setEnabled(False)
                 self.actions.createPoleMode.setEnabled(True)
+                self.actions.createBeamMode.setEnabled(True)
             else:
                 raise ValueError('Unsupported createMode: %s' % createMode)
         self.actions.editMode.setEnabled(not edit)
@@ -1245,11 +1274,15 @@ class MainWindow(QtWidgets.QMainWindow):
             text = items[0].data(Qt.UserRole)
         flags = {}
         group_id = None
-        if self.actions.createPoleMode.isEnabled() == True:
-            text = "Pole"
-        elif self._config['display_label_popup'] or not text:
+        
+        if self._config['display_label_popup'] or not text:
             previous_text = self.labelDialog.edit.text()
-            text, flags, group_id = self.labelDialog.popUp(text)
+            if self.actions.createPoleMode.isEnabled() == False:
+                text = "Pole"
+            elif self.actions.createBeamMode.isEnabled() == False:
+                text = "Beam"
+            else:
+                text, flags, group_id = self.labelDialog.popUp(text)
             if not text:
                 self.labelDialog.edit.setText(previous_text)
 
