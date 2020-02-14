@@ -354,7 +354,7 @@ class MainWindow(QtWidgets.QMainWindow):
         )
         createPoleMode = action(
             self.tr('Annotate Poles'),
-            lambda: self.toggleDrawMode(False, createMode='point'),
+            lambda: self.toggleDrawMode(False, createMode='pole'),
             shortcuts['create_pole'],
             'objects',
             self.tr('Start annotating poles'),
@@ -362,7 +362,7 @@ class MainWindow(QtWidgets.QMainWindow):
         )
         createBeamMode = action(
             self.tr('Annotate Beams'),
-            lambda: self.toggleDrawMode(False, createMode='point'),
+            lambda: self.toggleDrawMode(False, createMode='beam'),
             shortcuts['create_pole'],
             'objects',
             self.tr('Start annotating beams'),

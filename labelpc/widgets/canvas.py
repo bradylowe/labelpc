@@ -59,6 +59,7 @@ class Canvas(QtWidgets.QWidget):
         #   - createMode == 'rectangle': diagonal line of the rectangle
         #   - createMode == 'line': the line
         #   - createMode == 'point': the point
+
         self.line = Shape()
         self.prevPoint = QtCore.QPoint()
         self.prevMovePoint = QtCore.QPoint()
@@ -95,7 +96,7 @@ class Canvas(QtWidgets.QWidget):
     @createMode.setter
     def createMode(self, value):
         if value not in ['polygon', 'rectangle', 'circle',
-           'line', 'point', 'linestrip']:
+           'line', 'point', 'linestrip', 'pole', 'beam']:
             raise ValueError('Unsupported createMode: %s' % value)
         self._createMode = value
 
@@ -201,9 +202,10 @@ class Canvas(QtWidgets.QWidget):
             elif self.createMode == 'line':
                 self.line.points = [self.current[0], pos]
                 self.line.close()
-            elif self.createMode == 'point':
+            elif self.createMode == 'point' or self.createMode == 'pole' or self.createMode == 'beam':
                 self.line.points = [self.current[0]]
                 self.line.close()
+            
             self.repaint()
             self.current.highlightClear()
             return
@@ -326,7 +328,7 @@ class Canvas(QtWidgets.QWidget):
                     # Create new shape.
                     self.current = Shape(shape_type=self.createMode)
                     self.current.addPoint(pos)
-                    if self.createMode == 'point':
+                    if self.createMode == 'point' or self.createMode == 'pole' or self.createMode == 'beam':
                         self.finalise()
                     else:
                         if self.createMode == 'circle':
@@ -696,7 +698,7 @@ class Canvas(QtWidgets.QWidget):
             self.line.points = [self.current[-1], self.current[0]]
         elif self.createMode in ['rectangle', 'line', 'circle']:
             self.current.points = self.current.points[0:1]
-        elif self.createMode == 'point':
+        elif self.createMode == 'point'  or self.createMode == 'pole' or self.createMode == 'beam':
             self.current = None
         self.drawingPolygon.emit(True)
 
