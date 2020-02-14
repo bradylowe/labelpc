@@ -74,7 +74,7 @@ class Shape(object):
         if value is None:
             value = 'polygon'
         if value not in ['polygon', 'rectangle', 'point',
-           'line', 'circle', 'linestrip', 'pole', 'beam']:
+           'line', 'circle', 'linestrip', 'pole', 'beam', 'wall', 'walls']:
             raise ValueError('Unexpected shape_type: {}'.format(value))
         self._shape_type = value
 
@@ -88,7 +88,7 @@ class Shape(object):
             self.points.append(point)
 
     def canAddPoint(self):
-        return self.shape_type in ['polygon', 'linestrip']
+        return self.shape_type in ['polygon', 'linestrip', 'walls']
 
     def popPoint(self):
         if self.points:

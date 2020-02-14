@@ -376,6 +376,22 @@ class MainWindow(QtWidgets.QMainWindow):
             self.tr('Start drawing linestrip. Ctrl+LeftClick ends creation.'),
             enabled=False,
         )
+        createWallMode = action(
+            self.tr('Annotate Wall'),
+            lambda: self.toggleDrawMode(False, createMode='wall'),
+            shortcuts['create_wall'],
+            'objects',
+            self.tr('Start annotating a wall.'),
+            enabled=False,
+        )
+        createWallsMode = action(
+            self.tr('Annotate Walls'),
+            lambda: self.toggleDrawMode(False, createMode='walls'),
+            shortcuts['create_walls'],
+            'objects',
+            self.tr('Start annotating the walls.'),
+            enabled=False,
+        )
         editMode = action(self.tr('Edit Polygons'), self.setEditMode,
                           shortcuts['edit_polygon'], 'edit',
                           self.tr('Move and edit the selected polygons'),
@@ -516,6 +532,8 @@ class MainWindow(QtWidgets.QMainWindow):
             createPoleMode=createPoleMode,
             createBeamMode=createBeamMode,
             createLineStripMode=createLineStripMode,
+            createWallMode=createWallMode,
+            createWallsMode=createWallsMode,
             zoom=zoom, zoomIn=zoomIn, zoomOut=zoomOut, zoomOrg=zoomOrg,
             fitWindow=fitWindow, fitWidth=fitWidth,
             zoomActions=zoomActions,
@@ -548,6 +566,8 @@ class MainWindow(QtWidgets.QMainWindow):
                 createPointMode,
                 createPoleMode,
                 createBeamMode,
+                createWallMode,
+                createWallsMode,
                 createLineStripMode,
                 editMode,
                 edit,
@@ -572,6 +592,8 @@ class MainWindow(QtWidgets.QMainWindow):
                 createPointMode,
                 createPoleMode,
                 createBeamMode,
+                createWallMode,
+                createWallsMode,
                 createLineStripMode,
                 editMode,
             ),
@@ -776,6 +798,8 @@ class MainWindow(QtWidgets.QMainWindow):
             self.actions.createPoleMode,
             self.actions.createBeamMode,
             self.actions.createLineStripMode,
+            self.actions.createWallMode,
+            self.actions.createWallsMode,
             self.actions.editMode,
         )
         utils.addActions(self.menus.edit, actions + self.actions.editMenu)
@@ -805,6 +829,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.actions.createLineMode.setEnabled(True)
         self.actions.createPointMode.setEnabled(True)
         self.actions.createLineStripMode.setEnabled(True)
+        self.actions.createWallMode.setEnabled(True)
+        self.actions.createWallsMode.setEnabled(True)
         title = __appname__
         if self.filename is not None:
             title = '{} - {}'.format(title, self.filename)
@@ -892,6 +918,8 @@ class MainWindow(QtWidgets.QMainWindow):
             self.actions.createLineMode.setEnabled(True)
             self.actions.createPointMode.setEnabled(True)
             self.actions.createLineStripMode.setEnabled(True)
+            self.actions.createWallMode.setEnabled(True)
+            self.actions.createWallsMode.setEnabled(True)
             self.actions.createPoleMode.setEnabled(True)
             self.actions.createBeamMode.setEnabled(True)
         else:
@@ -902,6 +930,8 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.actions.createLineMode.setEnabled(True)
                 self.actions.createPointMode.setEnabled(True)
                 self.actions.createLineStripMode.setEnabled(True)
+                self.actions.createWallMode.setEnabled(True)
+                self.actions.createWallsMode.setEnabled(True)
                 self.actions.createPoleMode.setEnabled(True)
                 self.actions.createBeamMode.setEnabled(True)
             elif createMode == 'rectangle':
@@ -911,6 +941,8 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.actions.createLineMode.setEnabled(True)
                 self.actions.createPointMode.setEnabled(True)
                 self.actions.createLineStripMode.setEnabled(True)
+                self.actions.createWallMode.setEnabled(True)
+                self.actions.createWallsMode.setEnabled(True)
                 self.actions.createPoleMode.setEnabled(True)
                 self.actions.createBeamMode.setEnabled(True)
             elif createMode == 'line':
@@ -920,6 +952,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.actions.createLineMode.setEnabled(False)
                 self.actions.createPointMode.setEnabled(True)
                 self.actions.createLineStripMode.setEnabled(True)
+                self.actions.createWallsMode.setEnabled(True)
                 self.actions.createPoleMode.setEnabled(True)
                 self.actions.createBeamMode.setEnabled(True)
             elif createMode == 'point':
@@ -929,6 +962,8 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.actions.createLineMode.setEnabled(True)
                 self.actions.createPointMode.setEnabled(False)
                 self.actions.createLineStripMode.setEnabled(True)
+                self.actions.createWallMode.setEnabled(True)
+                self.actions.createWallsMode.setEnabled(True)
                 self.actions.createPoleMode.setEnabled(True)
                 self.actions.createBeamMode.setEnabled(True)
             elif createMode == 'pole':
@@ -938,6 +973,8 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.actions.createLineMode.setEnabled(True)
                 self.actions.createPointMode.setEnabled(True)
                 self.actions.createLineStripMode.setEnabled(True)
+                self.actions.createWallMode.setEnabled(True)
+                self.actions.createWallsMode.setEnabled(True)
                 self.actions.createPoleMode.setEnabled(False)
                 self.actions.createBeamMode.setEnabled(True)
             elif createMode == 'beam':
@@ -947,8 +984,32 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.actions.createLineMode.setEnabled(True)
                 self.actions.createPointMode.setEnabled(True)
                 self.actions.createLineStripMode.setEnabled(True)
+                self.actions.createWallMode.setEnabled(True)
+                self.actions.createWallsMode.setEnabled(True)
                 self.actions.createPoleMode.setEnabled(True)
                 self.actions.createBeamMode.setEnabled(False)
+            elif createMode == 'wall':
+                self.actions.createMode.setEnabled(True)
+                self.actions.createRectangleMode.setEnabled(True)
+                self.actions.createCircleMode.setEnabled(True)
+                self.actions.createLineMode.setEnabled(True)
+                self.actions.createPointMode.setEnabled(True)
+                self.actions.createLineStripMode.setEnabled(True)
+                self.actions.createWallMode.setEnabled(False)
+                self.actions.createWallsMode.setEnabled(True)
+                self.actions.createPoleMode.setEnabled(True)
+                self.actions.createBeamMode.setEnabled(True)
+            elif createMode == 'walls':
+                self.actions.createMode.setEnabled(True)
+                self.actions.createRectangleMode.setEnabled(True)
+                self.actions.createCircleMode.setEnabled(True)
+                self.actions.createLineMode.setEnabled(True)
+                self.actions.createPointMode.setEnabled(True)
+                self.actions.createLineStripMode.setEnabled(True)
+                self.actions.createWallMode.setEnabled(True)
+                self.actions.createWallsMode.setEnabled(False)
+                self.actions.createPoleMode.setEnabled(True)
+                self.actions.createBeamMode.setEnabled(True)
             elif createMode == "circle":
                 self.actions.createMode.setEnabled(True)
                 self.actions.createRectangleMode.setEnabled(True)
@@ -956,6 +1017,8 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.actions.createLineMode.setEnabled(True)
                 self.actions.createPointMode.setEnabled(True)
                 self.actions.createLineStripMode.setEnabled(True)
+                self.actions.createWallMode.setEnabled(True)
+                self.actions.createWallsMode.setEnabled(True)
                 self.actions.createPoleMode.setEnabled(True)
                 self.actions.createBeamMode.setEnabled(True)
             elif createMode == "linestrip":
@@ -965,6 +1028,8 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.actions.createLineMode.setEnabled(True)
                 self.actions.createPointMode.setEnabled(True)
                 self.actions.createLineStripMode.setEnabled(False)
+                self.actions.createWallMode.setEnabled(True)
+                self.actions.createWallsMode.setEnabled(True)
                 self.actions.createPoleMode.setEnabled(True)
                 self.actions.createBeamMode.setEnabled(True)
             else:
@@ -1281,6 +1346,10 @@ class MainWindow(QtWidgets.QMainWindow):
                 text = "Pole"
             elif self.actions.createBeamMode.isEnabled() == False:
                 text = "Beam"
+            elif self.actions.createWallMode.isEnabled() == False:
+                text = "Wall"
+            elif self.actions.createWallsMode.isEnabled() == False:
+                text = "Walls"
             else:
                 text, flags, group_id = self.labelDialog.popUp(text)
             if not text:
@@ -1556,7 +1625,7 @@ class MainWindow(QtWidgets.QMainWindow):
         angle = None
         from labelpc.pointcloud.Proprietary import align_room_by_walls_polygon
         for s in self.labelList.shapes:
-            if s.label[:4] == 'wall' and s.shape_type == 'polygon':
+            if s.label[:4] == 'walls' and s.shape_type == 'polygon':
                 points = [(p.x(), p.y()) for p in s.points]
                 angle = -align_room_by_walls_polygon(points)
                 break
