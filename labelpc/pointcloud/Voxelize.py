@@ -2,9 +2,7 @@
 import numpy as np
 from collections import defaultdict
 import hdbscan as hdb
-import time
-
-#import algorithms.Features as feat
+from tqdm import trange, tqdm
 
 
 class VoxelGrid:
@@ -26,14 +24,11 @@ class VoxelGrid:
         :param offset: 3D offset value allows to shift the voxel grid by some amount relative to the point cloud.
         This parameter effectively moves the origin of the voxel grid, allowing for more control of the grid.
         """
-        start = time.time()
         self.mesh_size = np.ones(3, dtype=float) * mesh_size
         self.offset = np.array(offset)
         self.points = np.array(points)
         self.n_occupied_voxels = None
         self.voxel_idx, self.sorted_points = self.voxelize()
-        end = time.time()
-        print('Took', end-start, 'seconds to build voxel grid')
 
     def __len__(self):
         """
@@ -49,7 +44,7 @@ class VoxelGrid:
     def index(self, point):
         """
         This function calculates the voxel index (xidx, yidx, zidx) of the input point. Note that the indices could
-        be negative if the input point is below or left of the origin.
+        be negative if the input point is below or left of the original point cloud
         :param point: Point of interest whose voxel indices to be calculated.
         :return: xidx, yidx, zidx (the 3D indices of the voxel containing the point).
         """
@@ -62,16 +57,12 @@ class VoxelGrid:
                  sorted_points, a dictionary mapping voxel indices to lists of point indices contained in the voxel),
                  nbins (total number of bins in the x, y, and z directions [i.e. xbins, ybins, zbins]).
         """
-        idx = ((self.points + self.offset) / self.mesh_size).astype(int)
-
-        # Convert numpy datatype to python tuple to use as input into hash table
-        idx = list(idx)
-        for i in range(len(idx)):
-            idx[i] = tuple(idx[i])
+        idx = list(((self.points + self.offset) / self.mesh_size).astype(int))
 
         # Sort the points into voxels
         sorted_points = defaultdict(list)
-        for i in range(len(self.points)):
+        for i in trange(len(self.points), desc='Building voxel grid'):
+            idx[i] = tuple(idx[i])
             sorted_points[idx[i]].append(i)
 
         return idx, sorted_points
@@ -214,19 +205,27 @@ class VoxelGrid:
         max_idx = self.index(self.max_corner())
         return [(i, j, k) for i in range(min_idx[0], max_idx[0]+1) for j in range(min_idx[1], max_idx[1]+1) for k in range(min_idx[2], max_idx[2]+1)]
 
-    def bitmap3d(self, max=None, swapaxes=True):
+    def bitmap3d(self, max=None, swapaxes=True, scores=None):
         """
         Return an array of integers indicating the number of points in each voxel in the grid. This array is
         3-dimensional, spanning all the voxels in the grid. If max is not None, then adjust the values in the
         bitmap to have the largest value equal to max. This bitmap can be fed directly into pyqtgraph.image() function.
+        If the user passes per-point scores into this function, then those scores will be used to create the bitmap,
+        otherwise the value will be set to the max value for all occupied voxels.
         """
         min_idx = np.array(self.index(self.min_corner()))
         max_idx = np.array(self.index(self.max_corner()))
-        range_idx = max_idx - min_idx + 1
+        range_idx = max_idx - min_idx + 2
         bitmap = np.zeros(range_idx, dtype=int)
-        for v in self.occupied():
-            i, j, k = np.array(v) - min_idx
-            bitmap[i][range_idx[1] - j - 1][k] = self.counts(v)
+        if scores is None:
+            for v in tqdm(self.occupied(), desc='Building 3D bitmap'):
+                i, j, k = np.array(v) - min_idx
+                #bitmap[i][range_idx[1] - j - 1][k] = self.counts(v)
+                bitmap[i][range_idx[1] - j - 1][k] = max
+        else:
+            for v in tqdm(self.occupied(), desc='Building 3D bitmap'):
+                i, j, k = np.array(v) - min_idx
+                bitmap[i][range_idx[1] - j - 1][k] = np.average(scores[self.indices(v)])
         if max is not None:
             bitmap = (bitmap * max / bitmap.max()).astype(int)
         if swapaxes:
@@ -234,8 +233,8 @@ class VoxelGrid:
         else:
             return bitmap
 
-    def bitmap2d(self, max=None, axis=2):
-        map = self.bitmap3d(max)
+    def bitmap2d(self, max=None, axis=2, scores=None):
+        map = self.bitmap3d(max, scores=scores)
         maps = []
         for i in range(map.shape[2-axis]):
             if axis == 0:
@@ -248,6 +247,7 @@ class VoxelGrid:
                 print('Invalid axis choice')
                 return []
         return maps
+
 
     def strip(self, center, radius=-1.0, axis=2):
         """
@@ -306,25 +306,6 @@ class VoxelGrid:
             return clusters, noise
         else:
             return clusters
-
-    def v_get_neighbors(self, point=None, range=0, scale=1, voxel=None):
-        """
-        Get all points from voxel containing current voxel and all voxels +/- range in any direction
-        :param point: Tuple of x, y, z coords
-        :param range: Range of voxels to get +/- in every dimension
-        :param scale: The zero-aligned scale to use, defaults to size 1
-        :return: DataFrame of points
-        """
-        v_x, v_y, v_z = self.index(point, scale)
-        if scale == 1:
-            return self.points[
-                ((self.points.v_x) >= (v_x - range)) & ((self.points.v_x) <= (v_x + range))
-                & ((self.points.v_y) >= (v_y - range)) & ((self.points.v_y) <= (v_y + range))
-                & ((self.points.v_z) >= (v_z - range)) & ((self.points.v_z) <= (v_z + range))]
-        else:
-            return self.points[((self.points.v_x // scale) >= (v_x - range)) & ((self.points.v_x // scale) <= (v_x + range))
-                               & ((self.points.v_y // scale) >= (v_y - range)) & ((self.points.v_y // scale) <= (v_y + range))
-                               & ((self.points.v_z // scale) >= (v_z - range)) & ((self.points.v_z // scale) <= (v_z + range))]
 
     def curvature(self, neighbors=0):
         """

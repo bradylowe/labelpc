@@ -1,4 +1,5 @@
 from laspy.file import File
+import open3d as o3d
 import numpy as np
 import pandas as pd
 import pptk
@@ -8,23 +9,20 @@ from labelpc.pointcloud.Mask import Mask
 
 
 class PointCloud:
-    def __init__(self, filename, point_size=0.03, max_points=10000000, render=True):
-        self.sample_las_file = '/home/brady/Data/RackBit.las'
+    def __init__(self, filename=None, point_size=0.01, max_points=10000000, render=True):
         self.point_size = point_size
         self.max_points = max_points
         self.render_flag = render
         self.viewer = None
         self.las_header = None
-        self.points = None
+        self.points = pd.DataFrame(columns=['x', 'y', 'z', 'class'])
         self.showing = None
         self.index = None
         self.filename = filename
-        if filename.endswith('.las'):
-            self.__load_las_file(filename)
-        elif filename.endswith('.ply'):
-            self.__load_ply_file(filename)
+        if filename is None:
+            self.render_flag = False
         else:
-            self.__load_xyz_file(filename)
+            self.load(filename)
 
     def __del__(self):
         if self.viewer:
@@ -33,43 +31,99 @@ class PointCloud:
     def __len__(self):
         return len(self.points)
 
+    def load(self, filename, max_points=None):
+        if max_points is not None:
+            self.max_points = max_points
+        if filename.endswith('.las') or filename.endswith('.laz'):
+            self.__load_las_file(filename)
+        elif filename.endswith('.ply'):
+            self.__load_ply_file(filename)
+        elif filename.endswith('.pcd'):
+            self.__load_pcd_file(filename)
+        elif filename.endswith('.xyz') or filename.endswith('.pts') or filename.endswith('.txt'):
+            self.__load_xyz_file(filename)
+        else:
+            print('Cannot load %s: file type not supported' % filename)
+            return
+        self.showing = Mask(len(self.points), True)
+        self.render(self.showing)
+
+    def __from_open3d_point_cloud(self, cloud):
+        new_df = pd.DataFrame(np.asarray(cloud.points), columns=['x', 'y', 'z'])
+        if cloud.has_normals():
+            normals = np.asarray(cloud.normals)
+            new_df['r'] = (normals[:, 0] * 255.).astype(int)
+            new_df['g'] = (normals[:, 1] * 255.).astype(int)
+            new_df['b'] = (normals[:, 2] * 255.).astype(int)
+        if cloud.has_colors():
+            colors = np.asarray(cloud.colors)
+            if colors[:, 0].max() > 0:
+                new_df['class'] = (colors[:, 0] * 31.).astype(int)
+            if colors[:, 1].max() > 0:
+                new_df['user_data'] = (colors[:, 1] * 255.).astype(int)
+            if colors[:, 2].max() > 0:
+                new_df['intensity'] = (colors[:, 2] * 255.).astype(int)
+        if self.max_points is not None and self.max_points < len(new_df):
+            new_df = new_df.loc[np.random.choice(len(new_df), self.max_points)]
+        return new_df
+
+    def __unzip_laz(self, infile, outfile=None):
+        import subprocess
+        if outfile is None:
+            outfile = infile.replace('.laz', '.las')
+        args = ['laszip', '-i', infile, '-o', outfile]
+        subprocess.run(" ".join(args), shell=True, stdout=subprocess.PIPE)
+
+    def __zip_las(self, infile, outfile=None):
+        import subprocess
+        if outfile is None:
+            outfile = infile.replace('.las', '.laz')
+        args = ['laszip', '-i', infile, '-o', outfile]
+        subprocess.run(" ".join(args), shell=True, stdout=subprocess.PIPE)
+
     def __load_las_file(self, filename):
+        if filename.endswith('.laz'):
+            orig_filename = filename
+            filename = 'TEMPORARY.las'
+            self.__unzip_laz(orig_filename, filename)
         with File(filename) as f:
-            self.las_header = f.header.copy()
+            if self.las_header is None:
+                self.las_header = f.header.copy()
             if self.max_points is not None and self.max_points < f.header.point_records_count:
                 mask = Mask(f.header.point_records_count, False)
                 mask[np.random.choice(f.header.point_records_count, self.max_points)] = True
             else:
                 mask = Mask(f.header.point_records_count, True)
-            self.points = pd.DataFrame(np.array((f.x, f.y, f.z)).T[mask.bools])
-            self.points.columns = ['x', 'y', 'z']
+            new_df = pd.DataFrame(np.array((f.x, f.y, f.z)).T[mask.bools])
+            new_df.columns = ['x', 'y', 'z']
             if f.header.data_format_id >= 2:
                 rgb = pd.DataFrame(np.array((f.red, f.green, f.blue), dtype='int').T[mask.bools])
                 rgb.columns = ['r', 'g', 'b']
-                self.points = self.points.join(rgb)
-            self.points['class'] = f.classification[mask.bools]
+                new_df = new_df.join(rgb)
+            new_df['class'] = f.classification[mask.bools]
             if np.sum(f.user_data):
-                self.points['user_data'] = f.user_data[mask.bools].copy()
+                new_df['user_data'] = f.user_data[mask.bools].copy()
             if np.sum(f.intensity):
-                self.points['intensity'] = f.intensity[mask.bools].copy()
-        self.showing = Mask(len(self.points), True)
-        self.render(self.showing)
+                new_df['intensity'] = f.intensity[mask.bools].copy()
+        self.points = self.points.append(new_df, sort=False)
+        if filename == 'TEMPORARY.las':
+            os.system('rm TEMPORARY.las')
 
-    def __load_ply_file(self, filename, scale=1.0):
+    def __load_ply_file(self, filename):
+        points = o3d.io.read_point_cloud(filename)
+        self.points = self.points.append(self.__from_open3d_point_cloud(points), sort=False)
+        """
         import plyfile
         data = plyfile.PlyData.read(filename)
-        self.points = pd.DataFrame()
-        self.points['x'] = data.elements[0]['x']
-        self.points['y'] = data.elements[0]['y']
-        self.points['z'] = data.elements[0]['z']
-        self.points['user_data'] = np.array(data.elements[0]['confidence'] * 255.0, dtype=int)
-        self.points['intensity'] = np.array(data.elements[0]['intensity'] * 255.0, dtype=int)
-        self.points['class'] = np.zeros(len(self.points), dtype=int)
-        self.showing = Mask(len(self.points), True)
-        self.render(self.showing)
-
-        with File(self.sample_las_file) as f:
-            self.las_header = f.header.copy()
+        new_df = pd.DataFrame()
+        new_df['x'] = data.elements[0]['x']
+        new_df['y'] = data.elements[0]['y']
+        new_df['z'] = data.elements[0]['z']
+        new_df['user_data'] = np.array(data.elements[0]['confidence'] * 255.0, dtype=int)
+        new_df['intensity'] = np.array(data.elements[0]['intensity'] * 255.0, dtype=int)
+        new_df['class'] = np.zeros(len(new_df), dtype=int)
+        self.points = self.points.append(new_df, sort=False)
+        """
 
     def __load_xyz_file(self, filename, indices=True):
         """
@@ -81,21 +135,152 @@ class PointCloud:
         column of indices and the header; otherwise it will probably not have the indices column or the header.
         """
         if indices:
-            self.points = pd.DataFrame.from_csv(filename)
+            new_df = pd.DataFrame.from_csv(filename)
         else:
-            self.points = pd.read_csv(filename)
-        if 'x' not in self.points or 'y' not in self.points:
+            new_df = pd.read_csv(filename)
+        if 'x' not in new_df or 'y' not in new_df:
             print('Error:  x and/or y missing from dataset. Please make sure there is x and y data in the point cloud',
                   'file, and that the file header indicates which columns store which attribute.')
             return
-        if 'z' not in self.points:
+        if 'z' not in new_df:
             self.points['z'] = np.zeros(len(self.points))
-        self.showing = Mask(len(self.points), True)
-        self.render(self.showing)
-        with File(self.sample_las_file) as f:
-            self.las_header = f.header.copy()
+        new_df['class'] = np.zeros(len(new_df), dtype=int)
+        self.points = self.points.append(new_df, sort=False)
 
-    def render(self, mask=None, highlighted=False, showing=False):
+    def __load_pcd_file(self, filename):
+        points = o3d.io.read_point_cloud(filename)
+        self.points = self.points.append(self.__from_open3d_point_cloud(points), sort=False)
+        """
+        # Fixme: pypcd only works if you install using --> pip3 install --upgrade git+https://github.com/klintan/pypcd.git
+        from pypcd import pypcd
+        pcd = pypcd.PointCloud.from_path(filename)
+        new_df = pd.DataFrame()
+        new_df['x'] = pcd.pc_data['x']
+        new_df['y'] = pcd.pc_data['y']
+        new_df['z'] = pcd.pc_data['z']
+        new_df['class'] = np.zeros(len(new_df), dtype=int)
+        new_df = new_df.fillna(0)
+        print(new_df)
+        self.points = self.points.append(new_df, sort=False)
+        """
+
+    def __to_open3d_point_cloud(self, df):
+        cloud = o3d.geometry.PointCloud()
+        cloud.points = o3d.utility.Vector3dVector(df[['x', 'y', 'z']].values)
+        if 'r' in df.columns:
+            cloud.normals = o3d.utility.Vector3dVector(df[['r', 'g', 'b']].values / 255.)
+        colors = np.zeros((len(df), 3))
+        colors[:, 0] = df['class'] / 31.
+        if 'user_data' in df.columns:
+            colors[:, 1] = df['user_data'] / 255.
+        if 'intensity' in df.columns:
+            colors[:, 2] = df['intensity'] / 255.
+        if colors.max() > 0:
+            cloud.colors = o3d.utility.Vector3dVector(colors)
+        return cloud
+
+    def write(self, filename=None, mask=None, indices=None, highlighted=False, showing=False, overwrite=False, points=None):
+        """
+        This function allows the user to write out a subset of the current points to a file.
+        :param filename: Output filename to write to. Default is {current_filename}_out.las.
+        :param mask: Mask object used to indicate which points to write to file.
+        :param indices: List of integer indices indicating which points to write to file.
+        :param highlighted: If True, then write the currently highlighted points to file.
+        :param showing: If True, then write all the currently rendered points to file.
+        :param overwrite: If True, then overwrite an existing file
+        :param points: Pandas DataFrame containing the points and all the data to write. This DataFrame object must
+        have x, y, and z attributes and optionally can have r, g, b, class, intensity, and user_data attributes.
+        """
+        if filename is None:
+            filename = self.filename
+        if os.path.exists(filename) and not overwrite:
+            print(filename, 'already exists. Use option "overwrite=True" to overwrite')
+            return
+        if mask is None and points is None:
+            mask = self.select(indices, highlighted, showing)
+        if points is None:
+            points = self.points.loc[mask.bools]
+        if filename.endswith('.las') or filename.endswith('.laz'):
+            self.__write_las_file(filename, points)
+        elif filename.endswith('.ply'):
+            self.__write_ply_file(filename, points)
+        elif filename.endswith('.pcd'):
+            self.__write_pcd_file(filename, points)
+        elif filename.endswith('.xyz') or filename.endswith('.pts') or filename.endswith('.txt'):
+            self.__write_xyz_file(filename, points)
+        else:
+            print('Unrecognized file type. Please use .las, .ply, .pcd, .xyz, .pts, or .txt.')
+            return
+        print('Wrote %d points to %s' % (len(points), filename))
+
+    def __write_las_file(self, filename, points):
+        if filename.endswith('.laz'):
+            orig_filename = filename
+            filename = 'TEMPORARY.las'
+        with File(filename, self.las_header, mode='w') as f:
+            if f.header.data_format_id < 2:
+                f.header.data_format_id = 2
+
+            f.x, f.y, f.z = points[['x', 'y', 'z']].values.T
+            if 'r' in points:
+                f.red, f.green, f.blue = points[['r', 'g', 'b']].values.T
+            if 'class' in points:
+                f.classification = points['class'].values
+            if 'user_data' in points:
+                f.user_data = points['user_data'].values
+            if 'intensity' in points:
+                f.intensity = points['intensity'].values
+        if filename == 'TEMPORARY.las':
+            self.__zip_las('TEMPORARY.las', orig_filename)
+            os.system('rm TEMPORARY.las')
+
+    def __write_xyz_file(self, filename, points):
+        points.to_csv(filename)
+
+    def __write_ply_file(self, filename, points):
+        cloud = self.__to_open3d_point_cloud(points)
+        o3d.io.write_point_cloud(filename, cloud)
+
+    def __write_pcd_file(self, filename, points):
+        cloud = self.__to_open3d_point_cloud(points)
+        o3d.io.write_point_cloud(filename, cloud)
+        """
+        from pypcd import pypcd
+        pc = pypcd.make_xyz_point_cloud(points.values)
+        pc.save_pcd(filename)
+        """
+
+    def prepare_viewer(self, render_flag=None):
+        """
+        Check to see if the viewer is ready to receive commands. If it isn't, get it ready and return True.
+        If the render flag is False, return False.
+        """
+        if render_flag is not None:
+            self.render_flag = render_flag
+        if not self.render_flag:
+            return False
+        if not self.viewer_is_ready():
+            self.render(showing=True)
+            return True
+
+    def viewer_is_ready(self):
+        """
+        Return True if the viewer is ready to receive commands, else return False.
+        """
+        if not self.render_flag or not self.viewer:
+            return False
+        try:
+            self.viewer.get('lookat')
+            return True
+        except ConnectionRefusedError:
+            return False
+
+    def close_viewer(self):
+        if self.viewer_is_ready():
+            self.viewer.close()
+        self.viewer = None
+
+    def render(self, mask=None, indices=None, highlighted=False, showing=False):
         """
         This function allows the user to render some selection of the points to the viewer.
         By default, this function will render all points when called. If a mask is supplied, then those points
@@ -108,18 +293,18 @@ class PointCloud:
             return
 
         if mask is None:
-            mask = self.select(highlighted=highlighted, showing=showing)
+            mask = self.select(indices=indices, highlighted=highlighted, showing=showing)
 
         if not mask.count():
             return
 
         self.showing.set(mask.bools)
 
-        if not self.viewer:
-            self.viewer = pptk.viewer(self.points.loc[mask.bools][['x', 'y', 'z']])
-        else:
+        if self.viewer_is_ready():
             self.viewer.clear()
             self.viewer.load(self.points.loc[mask.bools, ['x', 'y', 'z']])
+        else:
+            self.viewer = pptk.viewer(self.points.loc[mask.bools][['x', 'y', 'z']])
 
         self.viewer.set(point_size=self.point_size, selected=[])
         if 'r' in self.points:
@@ -143,76 +328,6 @@ class PointCloud:
         else:
             self.viewer.attributes(self.points.loc[mask.bools, 'class'])
 
-    def write(self, filename=None, mask=None, indices=None, highlighted=False, showing=False, overwrite=False, points=None):
-        """
-        This function allows the user to write out a subset of the current points to a LAS file.
-        :param filename: Output filename to write to. Default is {current_filename}_out.las.
-        :param mask: Mask object used to indicate which points to write to file.
-        :param indices: List of integer indices indicating which points to write to file.
-        :param highlighted: If True, then write the currently highlighted points to file.
-        :param showing: If True, then write all the currently rendered points to file.
-        :param overwrite: If True, then overwrite an existing file
-        :param points: Pandas DataFrame containing the points and all the data to write. This DataFrame object must
-        have x, y, and z attributes and optionally can have r, g, b, class, intensity, and user_data attributes.
-        """
-        if filename is None:
-            filename = self.filename.split('.')[0] + '_out.las'
-        elif not filename.endswith('.las'):
-            filename += '.las'
-
-        if os.path.exists(filename) and not overwrite:
-            print(filename, 'already exists. Use option "overwrite=True" to overwrite')
-            return
-
-        if mask is None:
-            mask = self.select(indices, highlighted, showing)
-
-        with File(filename, self.las_header, mode='w') as f:
-            if f.header.data_format_id < 2:
-                f.header.data_format_id = 2
-
-            if points is None:
-                points = self.points.loc[mask.bools]
-
-            f.x, f.y, f.z = points[['x', 'y', 'z']].values.T
-            if 'r' in points:
-                f.red, f.green, f.blue = points[['r', 'g', 'b']].values.T
-            if 'class' in points:
-                f.classification = points['class'].values
-            if 'user_data' in points:
-                f.user_data = points['user_data'].values
-            if 'intensity' in points:
-                f.intensity = points['intensity'].values
-
-            print('Wrote %d points to %s' % (len(points), filename))
-
-    def write_xyz(self, filename=None, mask=None, indices=None, highlighted=False, showing=False, points=None):
-        """
-        Write the selected points out to a csv file (text file format). All attributes will be written.
-        """
-        if mask is None:
-            mask = Mask(len(self.points), True)
-        if indices is not None:
-            mask.setr(indices)
-        if highlighted:
-            mask.setr(self.viewer.get('selected'))
-        if showing:
-            mask.set(self.showing.bools)
-
-        if filename is None:
-            filename = self.filename.replace('.las', '.xyz')
-
-        if points is None:
-            self.points.loc[mask.bools].to_csv(filename)
-        else:
-            points.to_csv(filename)
-
-    def write_ply(self, filename=None, mask=None, indices=None, highlighted=False, showing=False, points=None):
-        """
-        Write the selected points out to a csv file (text file format).
-        """
-        pass
-
     def get_relative_indices(self, mask, relative=None):
         """
         Return the chosen point indices relative to the currently rendered points (or some other set).
@@ -227,16 +342,21 @@ class PointCloud:
         Return a mask indicating which points are currently highlighted in the viewer.
         """
         mask = Mask(len(self.points), False)
-        if self.viewer is not None:
+        if self.viewer_is_ready():
             mask.setr_subset(self.viewer.get('selected'), self.showing)
         return mask
 
-    def highlight(self, mask):
+    def highlight(self, mask=None, indices=None):
         """
         Set the selected points to be highlighted in the viewer (if they are rendered).
         """
-        indices = self.get_relative_indices(mask)
-        self.viewer.set(selected=indices)
+        if mask is None and indices is None:
+            return
+        if indices is not None:
+            mask = self.select(indices=indices, highlighted=False)
+        if self.viewer_is_ready():
+            indices = self.get_relative_indices(mask)
+            self.viewer.set(selected=indices)
 
     def get_perspective(self):
         """
@@ -244,6 +364,8 @@ class PointCloud:
         can return to this perspective later or use it in a rendering sequence.
         :return: Perspective parameters (x, y, z, phi, theta, r).
         """
+        if not self.viewer_is_ready():
+            return [0, 0, 0, 0, 0, 0]
         x, y, z = self.viewer.get('eye')
         phi = self.viewer.get('phi')
         theta = self.viewer.get('theta')
@@ -256,7 +378,8 @@ class PointCloud:
         its single argument where the list defines the lookat position (x, y, z) the azimuthal angle, the elevation
         angle, and the distance from the lookat position. This list is returned from the method 'get_perspective()'.
         """
-        self.viewer.set(lookat=p[0:3], phi=p[3], theta=p[4], r=p[5])
+        if self.viewer_is_ready():
+            self.viewer.set(lookat=p[0:3], phi=p[3], theta=p[4], r=p[5])
 
     def select(self, indices=None, highlighted=True, showing=False, classes=None, data=None, intensity=None,
                red=None, green=None, blue=None, compliment=False):
@@ -277,7 +400,6 @@ class PointCloud:
         :param compliment: If True, return a mask indicating the NON-selected points.
         :return: Boolean mask indicating which points are selected relative to the full set.
         """
-
         if 'r' not in self.points:
             red, green, blue = None, None, None
 
@@ -329,10 +451,6 @@ class PointCloud:
         """
         Set the class of the currently selected points to cls. If the class is already set, then only
         overwrite the old value if "overwrite" is True.
-        :param cls:
-        :param overwrite:
-        :param mask:
-        :return:
         """
         if mask is None:
             mask = self.get_highlighted_mask()
@@ -341,55 +459,114 @@ class PointCloud:
         self.points.loc[mask.bools, 'class'] = cls
         self.render(showing=True)
 
-    def rotate(self, points=None, degrees=0.0, axis=2):
+    def center(self):
         """
-        This function takes in a list of points (or uses the currently rendered points) and returns a set of points that
-        have been rotated by 'degrees' degrees about the given axis. By default, axis=2, so the points will rotate
-        about the z-axis.
+        Shift the origin of the point cloud to its centroid.
         """
-        if points is None:
-            points = self.points.loc[self.showing.bools][['x', 'y', 'z']].values
+        self.points[['x', 'y', 'z']] -= np.average(self.points[['x', 'y', 'z']], axis=0)
+
+    def reset_origin(self):
+        """
+        Shift the origin of the point cloud to the minimum of the point cloud.
+        """
+        self.points[['x', 'y', 'z']] -= self.points[['x', 'y', 'z']].values.min(axis=0)
+
+    def subsample(self, n=10000000, percent=1.0):
+        """
+        Return a random sample of the point cloud.
+        """
+        threshold = int(percent * len(self.points))
+        if n < threshold:
+            threshold = n
+        if threshold < len(self.points):
+            keep = np.zeros(len(self.points), dtype=bool)
+            keep[np.random.choice(len(self.points), threshold)] = True
+            return keep
         else:
-            points = points.copy()
+            return np.ones(len(self.points), dtype=bool)
 
-        t = np.radians(degrees)
-        rot = np.array(((np.cos(t), -np.sin(t)), (np.sin(t), np.cos(t))))
-        if axis == 0:
-            points[:, [1,2]] = np.dot(points[:, [1,2]], rot)
+    def add_points(self, points):
+        """
+        Append a pandas dataframe of points to the current list of points. The pandas DataFrame
+        must have 'x' and 'y' columns, and cannot have any abnormal columns in it.
+        """
+        if not isinstance(points, pd.DataFrame):
+            print('Error: points must be in the form of a pandas DataFrame. Cannot append.')
+            return
+        if 'x' not in points.columns or 'y' not in points.columns:
+            print('Error: missing x and/or y column data. Cannot append.')
+            return
+        for c in points.columns:
+            if c not in self.points.columns:
+                print('Error: unknown column', c, 'in points. Cannot append.')
+                return
+        self.points = self.points.append(points)
+        self.points = self.points.fillna(0)
+
+    def slice(self, points=None, position=1.75, thickness=0.2, axis=2):
+        """
+        Take a planar slice of some thickness out of the data. The slice will be axis-aligned.
+        :param points: Set of points to take slice from. Default is all currently rendered points.
+        :param position: Position along axis to take slice from. Default is 1.75, set for slicing vertical poles above pallets.
+        :param thickness: Thickness of slice to take. Default is 0.2 (20 cm).
+        :param axis: Axis perpendicular to the slice of data. Must be 0, 1, or 2 (default is 2 (z-axis)).
+        """
+        if axis == 2:
+            str_axis = 'z'
         elif axis == 1:
-            points[:, [0,2]] = np.dot(points[:, [0,2]], rot)
-        elif axis == 2:
-            points[:, [0,1]] = np.dot(points[:, [0,1]], rot)
-
-        return points
-
-    def normals(self, points=None, k=100, r=0.35, render=False):
-        """
-        This function takes in a set of points (or uses the currently rendered points) and calculates the surface
-        normals using pptk built-in functions which use PCA method. The number of neighbors (k) or the distance
-        scale (r) can be changed to affect the resolution of the computation. If render=True, then the results
-        will be rendered upon completion.
-        """
+            str_axis = 'y'
+        else:
+            str_axis = 'x'
         if points is None:
             points = self.points.loc[self.showing.bools][['x', 'y', 'z']].values
+        mask = points[str_axis] > position
+        mask[points[str_axis] > position + thickness] = False
+        return mask
 
-        n = np.abs(pptk.estimate_normals(points, k, r))
-        if render:
-            self.viewer.attributes(n)
-
-        return n
-
-    def curvature(self, points=None, k=100, r=0.35):
-        """
-        This function takes in a set of points (or uses the currently rendered points) and calculates the surface
-        curvature using pptk built-in functions which use PCA method. The number of neighbors (k) or the distance
-        scale (r) can be changed to affect the resolution of the computation. If render=True, then the results
-        will be rendered upon completion.
-        """
+    def in_box_2d(self, box, points=None):
         if points is None:
-            points = self.points.loc[self.showing.bools][['x', 'y', 'z']].values
+            points = self.points.loc[self.showing.bools][['x', 'y']].values
+        keep = points > np.array(box[0])
+        keep[points > np.array(box[1])] = False
+        return keep.all(axis=1)
 
-        eigens = np.abs(pptk.estimate_normals(points, k, r, output_eigenvalues=True)[0])
-        eigens.sort(axis=1)
-        return eigens[:, 0] / eigens.sum(axis=1) * 3.0
+    @staticmethod
+    def make_box_from_point(point, delta):
+        point = np.array(point)
+        return [point - delta, point + delta]
 
+    def get_points_within(self, delta, point=None, return_mask=False, return_z=False):
+        """
+        Returns all the points within delta of the given point. Z-axis is not considered in distance calculation.
+        If point is None, then use the currently highlighted point as the query point. If multiple points are currently
+        highlighted, then use their average as the query point.
+        """
+        if point is None:
+            selected = self.get_highlighted_mask()
+            point = np.average(self.points.loc[selected.bools][['x', 'y']], axis=0)
+        x, y = point[:2]
+        keep = np.ones(len(self.points), dtype=bool)
+        keep[self.points['x'] < x - delta] = False
+        keep[self.points['x'] > x + delta] = False
+        keep[self.points['y'] < y - delta] = False
+        keep[self.points['y'] > y + delta] = False
+        if return_mask:
+            return keep
+        elif return_z:
+            return self.points.loc[keep][['x', 'y', 'z']].values
+        else:
+            return self.points.loc[keep][['x', 'y']].values
+
+    def distance_to_line(self, line, point):
+        p1, p2 = line
+        dx, dy = p2[0] - p1[0], p2[1] - p1[1]
+        num = np.abs(dy * point[0] - dx * point[1] + p2[0] * p1[1] - p2[1] * p1[0])
+        den = np.sqrt(np.square(dx) + np.square(dy))
+        return num / den
+
+    def get_points_under_line(self, line, delta=0.01):
+        keep = np.zeros(len(self.points), dtype=bool)
+        for i, p in self.points:
+            if self.distance_to_line(line, p) < delta:
+                keep[i] = True
+        return np.arange(len(self.points))[keep]

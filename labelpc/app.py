@@ -21,6 +21,8 @@ from labelpc import __appname__
 from labelpc import PY2
 from labelpc import QT5
 
+from labelpc.dialogs.open_file_dialog import OpenFileDialog
+
 from . import utils
 from labelpc.config import get_config
 from labelpc.label_file import LabelFile
@@ -39,43 +41,23 @@ from labelpc.pointcloud.PointCloud import PointCloud
 from labelpc.pointcloud.Voxelize import VoxelGrid
 
 
-# FIXME
-# - [medium] Set max zoom value to something big enough for FitWidth/Window
-
-# TODO(unknown):
-# - [high] Add polygon movement with arrow keys
-# - [high] Deselect shape when clicking and already selected(?)
-# - [low,maybe] Open images with drag & drop.
-# - [low,maybe] Preview images on file dialogs.
-# - Zoom is too "steppy".
-
+# TODO:
+#   make labelList trigger annotation mode
+#   create annotations for individual slices ???
+#   Snap to corner
+#   Snap to center
+#   tighten annotation function (tighten boxes to racks)
+#   room alignment (user input rough align AND final, automatic fine alignment)
+#   Cross hair targeting point annotations
+#   Break rack (turn one annotation into 2 and resize each independently) (manual mode AND automatic using beams)
+#   Merge racks (turn two annotations into 1)
+#   Figure out user interface for breaking and merging racks
+#   Rotate rack (change orientation {direction pallet goes into and out of rack})
+#   Create icons for buttons
+#   Create shortcuts
 
 LABEL_COLORMAP = imgviz.label_colormap(value=200)
 
-class InputDialog(QDialog):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-
-        self.maxPoints = QLineEdit(self)
-        self.meshSize = QLineEdit(self)
-        self.thickness = QLineEdit(self)
-        self.maxPoints.setText("500000")
-        self.meshSize.setText("0.02")
-        self.thickness.setText("0.2")
-        buttonBox = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel, self);
-
-        layout = QFormLayout(self)
-        layout.addRow("Max Points", self.maxPoints)
-        layout.addRow("Mesh Size", self.meshSize)
-        layout.addRow("Thickness", self.thickness)
-        layout.addWidget(buttonBox)
-
-
-        buttonBox.accepted.connect(self.accept)
-        buttonBox.rejected.connect(self.reject)
-
-    def getInputs(self):
-        return (int(self.maxPoints.text()), float(self.meshSize.text()), float(self.thickness.text()))
 
 class MainWindow(QtWidgets.QMainWindow):
 
@@ -97,7 +79,7 @@ class MainWindow(QtWidgets.QMainWindow):
             if output_file is None:
                 output_file = output
 
-        # see labelme/config/default_config.yaml for valid configuration
+        # see labelpc/config/default_config.yaml for valid configuration
         if config is None:
             config = get_config()
         self._config = config
@@ -121,7 +103,6 @@ class MainWindow(QtWidgets.QMainWindow):
             flags=self._config['label_flags']
         )
 
-        self.labelList = LabelQListWidget()
         self.lastOpenDir = None
 
         self.flag_dock = self.flag_widget = None
@@ -133,6 +114,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.flag_dock.setWidget(self.flag_widget)
         self.flag_widget.itemChanged.connect(self.setDirty)
 
+        self.labelList = LabelQListWidget()
         self.labelList.itemActivated.connect(self.labelSelectionChanged)
         self.labelList.itemSelectionChanged.connect(self.labelSelectionChanged)
         self.labelList.itemDoubleClicked.connect(self.editLabel)
@@ -149,6 +131,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.shape_dock.setWidget(self.labelList)
 
         self.uniqLabelList = UniqueLabelQListWidget()
+        self.labelList.itemActivated.connect(self.modeSelectionChanged)
         self.uniqLabelList.setToolTip(self.tr(
             "Select label to start annotating for it. "
             "Press 'Esc' to deselect."))
@@ -230,13 +213,12 @@ class MainWindow(QtWidgets.QMainWindow):
         quit = action(self.tr('&Quit'), self.close, shortcuts['quit'], 'quit',
                       self.tr('Quit application'))
         open_ = action(self.tr('&Open'),
-                       #self.openFile,
                        self.openPointCloud,
                        shortcuts['open'],
                        'open',
-                       self.tr('Open image or label file'))
-        #opendir = action(self.tr('&Open Dir'), self.openDirDialog,
-        #                 shortcuts['open_dir'], 'open', self.tr(u'Open Dir'))
+                       self.tr('Open point cloud file'))
+        opendir = action(self.tr('&Open Dir'), self.openDirDialog,
+                         shortcuts['open_dir'], 'open', self.tr(u'Open Dir'))
         showNextSlice = action(
             self.tr('Next Slice'),
             self.showNextSlice,
@@ -292,17 +274,18 @@ class MainWindow(QtWidgets.QMainWindow):
             slot=self.enableSaveImageWithData,
             tip='Save image data in label file',
             checkable=True,
-            checked=self._config['store_data'],
+            checked=False,
+            #checked=self._config['store_data'],
         )
 
         close = action('&Close', self.closeFile, shortcuts['close'], 'close',
                        'Close current file')
 
-        align_room = action('Align Room', self.alignRoom, '', 'align', 'Align the room using walls')
+        align_room = action('Align Room', self.alignRoom, None, 'align', 'Align the room using walls')
 
-        render_3d = action('Render points in 3D', self.render3d, '', 'render', 'Render the points in 3D')
+        render_3d = action('Render points in 3D', self.render3d, None, 'render', 'Render the points in 3D')
 
-        highlight_walls = action('Highlight walls', self.highlightWalls, '', 'highlight', 'Highlight walls')
+        highlight_walls = action('Highlight walls', self.highlightWalls, None, 'highlight', 'Highlight walls')
 
         toggle_keep_prev_mode = action(
             self.tr('Keep Previous Annotation'),
@@ -671,7 +654,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.scale = None
         self.thickness = None
         self.offset = None
-        self.pointcloud = None
+        self.pointcloud = PointCloud(render=False)
         self.zoom_values = {}  # key=filename, value=(zoom_mode, zoom_value)
         self.scroll_values = {
             Qt.Horizontal: {},
@@ -810,7 +793,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.statusBar().showMessage(message, delay)
 
     def resetState(self):
+        self.image = QtGui.QImage()
         self.labelList.clear()
+        self.sliceIdx = 0
         self.filename = None
         self.sourcePath = None
         self.imageData = None
@@ -820,7 +805,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.thickness = None
         self.scale = None
         self.offset = None
-        self.pointcloud = None
+        self.pointcloud.close_viewer()
+        self.pointcloud = PointCloud(render=False)
         self.canvas.resetState()
 
     def currentItem(self):
@@ -988,6 +974,10 @@ class MainWindow(QtWidgets.QMainWindow):
             item.setData(role=Qt.UserRole, value=shape.label)
             self.uniqLabelList.addItem(item)
 
+    def modeSelectionChanged(self):
+        # Todo: enter into the proper label annotation mode according to selected item in uniqLabelList
+        pass
+
     def fileSearchChanged(self):
         self.importDirImages(
             self.lastOpenDir,
@@ -1064,9 +1054,11 @@ class MainWindow(QtWidgets.QMainWindow):
         shape.line_color = QtGui.QColor(r, g, b)
         shape.vertex_fill_color = QtGui.QColor(r, g, b)
         shape.hvertex_fill_color = QtGui.QColor(255, 255, 255)
-        shape.fill_color = QtGui.QColor(r, g, b, 128)
+        #shape.fill_color = QtGui.QColor(r, g, b, 128)
+        shape.fill_color = QtGui.QColor(r, g, b, 64)
         shape.select_line_color = QtGui.QColor(255, 255, 255)
-        shape.select_fill_color = QtGui.QColor(r, g, b, 155)
+        #shape.select_fill_color = QtGui.QColor(r, g, b, 155)
+        shape.select_fill_color = QtGui.QColor(r, g, b, 128)
 
     def _get_rgb_by_label(self, label):
         if self._config['shape_color'] == 'auto':
@@ -1304,21 +1296,36 @@ class MainWindow(QtWidgets.QMainWindow):
         for item, shape in self.labelList.itemsToShapes:
             item.setCheckState(Qt.Checked if value else Qt.Unchecked)
 
-    def loadFile(self, filename=None):
-        """Load the specified file, or the last opened file if None."""
+    def loadFile(self, filename):
         # changing fileListWidget loads file
-        if (filename in self.imageList and
-                self.fileListWidget.currentRow() !=
-                self.imageList.index(filename)):
+        if filename in self.imageList and self.fileListWidget.currentRow() != self.imageList.index(filename):
             self.fileListWidget.setCurrentRow(self.imageList.index(filename))
             self.fileListWidget.repaint()
             return
 
+        self.canvas.setEnabled(False)
         self.resetState()
-        self.load_point_cloud(filename)
-        self.load_labels_file(filename)
+        dialog = OpenFileDialog()
+        if dialog.exec():
+            self.max_points, self.scale, self.thickness = dialog.getInputs()
+        self.lastOpenDir = osp.dirname(filename)
+        self.status(self.tr('Loading points from file'))
+        self.loadPointCloud(filename)
+        self.status(self.tr('Building voxel grid'))
+        self.buildVoxelGrid()
+        self.status(self.tr('Building pixel maps'))
+        self.buildImageData()
+        self.updatePixmap()
+        self.loadLabelsFile(filename)
+        self.setZoomAndScroll()
+        self.canvas.setEnabled(True)
 
-        # set zoom values
+        self.paintCanvas()
+        self.addRecentFile(self.filename)
+        self.toggleActions(True)
+        self.status(self.tr("Loaded %s") % osp.basename(str(filename)))
+
+    def setZoomAndScroll(self):
         is_initial_load = not self.zoom_values
         if self.filename in self.zoom_values:
             self.zoomMode = self.zoom_values[self.filename][0]
@@ -1331,18 +1338,8 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.setScroll(
                     orientation, self.scroll_values[orientation][self.filename]
                 )
-        self.paintCanvas()
-        self.addRecentFile(self.filename)
-        self.toggleActions(True)
-        self.status(self.tr("Loaded %s") % osp.basename(str(filename)))
-        return True
 
-    def load_point_cloud(self, filename):
-        if self.pointcloud is not None:
-            del self.pointcloud
-        self.canvas.setEnabled(False)
-        if filename is None:
-            filename = self.settings.value('filename', '')
+    def loadPointCloud(self, filename):
         filename = str(filename)
         if not QtCore.QFile.exists(filename):
             self.errorMessage(
@@ -1350,40 +1347,42 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.tr('No such file: <b>%s</b>') % filename
             )
             return False
+        self.filename = str(filename)
+        self.pointcloud.load(filename, self.max_points)
+        self.status(self.tr("Loaded %s") % osp.basename(filename))
 
-        if self.max_points is None:
-            dialog = InputDialog()
-            if dialog.exec():
-                self.max_points, self.scale, self.thickness = dialog.getInputs()
-        self.pointcloud = PointCloud(filename, render=False, max_points=self.max_points)
-        self.voxelgrid = VoxelGrid(self.pointcloud.points[['x', 'y', 'z']].values, (self.scale, self.scale, self.thickness))
+    def buildVoxelGrid(self):
+        self.voxelgrid = VoxelGrid(self.pointcloud.points.loc[self.pointcloud.showing.bools][['x', 'y', 'z']].values,
+                                   (self.scale, self.scale, self.thickness))
         offx, offy = self.voxelgrid.min_corner()[:2]
         self.offset = QtCore.QPointF(offx, offy)
-        self.imageData = self.make_images_from_voxel_grid()
-        self.sourcePath = filename
-        self.sliceIdx = 0
-        image = QtGui.QImage.fromData(self.imageData[self.sliceIdx])
 
-        if image.isNull():
-            formats = ['*.{}'.format(fmt.data().decode())
-                       for fmt in QtGui.QImageReader.supportedImageFormats()]
-            self.errorMessage(
-                self.tr('Error opening file'),
-                self.tr(
-                    '<p>Make sure <i>{0}</i> is a valid image file.<br/>'
-                    'Supported image formats: {1}</p>'
-                ).format(filename, ','.join(formats))
-            )
-            self.status(self.tr("Error reading %s") % filename)
-            return False
+    def buildImageData(self, scores=None, axis=2):
+        if self.voxelgrid is None:
+            logger.warn('No voxel grid built to make images from')
+            return
+        bitmaps = self.voxelgrid.bitmap2d(max=255, axis=axis, scores=scores)
+        self.imageData = []
+        # Create images from numpy arrays
+        for m in bitmaps:
+            img = PIL.Image.fromarray(np.asarray(m, dtype="uint8"))
+            buff = BytesIO()
+            img.save(buff, format="JPEG")
+            buff.seek(0)
+            self.imageData.append(buff.read())
 
-        self.image = image
-        self.filename = filename
-        self.canvas.loadPixmap(QtGui.QPixmap.fromImage(image))
-        self.canvas.setEnabled(True)
+    def updatePixmap(self):
+        if not self.imageData:
+            return
+        if self.sliceIdx >= len(self.imageData):
+            self.sliceIdx = 0
+        if self.sliceIdx < 0:
+            self.sliceIdx = len(self.imageData) - 1
+        self.image = QtGui.QImage.fromData(self.imageData[self.sliceIdx])
+        self.canvas.loadPixmap(QtGui.QPixmap.fromImage(self.image))
+        self.canvas.loadShapes(self.labelList.shapes)
 
-    def load_labels_file(self, filename):
-        self.canvas.setEnabled(False)
+    def loadLabelsFile(self, filename):
         self.status(self.tr("Loading %s...") % osp.basename(str(filename)))
         label_file = osp.splitext(filename)[0] + '.json'
         if self.output_dir:
@@ -1420,7 +1419,6 @@ class MainWindow(QtWidgets.QMainWindow):
             self.setDirty()
         else:
             self.setClean()
-        self.canvas.setEnabled(True)
 
     def resizeEvent(self, event):
         if self.canvas and not self.image.isNull()\
@@ -1491,6 +1489,19 @@ class MainWindow(QtWidgets.QMainWindow):
         return data
 
     def alignRoom(self):
+        if not self.dirty:
+            return True
+        mb = QtWidgets.QMessageBox
+        msg = self.tr('This action requires that the annotations be saved and the point cloud reloaded.'
+                      'Are you sure you want to apply the changes?')
+        answer = mb.question(self,
+                             self.tr('Continue?'),
+                             msg,
+                             mb.Apply | mb.Cancel,
+                             mb.Apply)
+        if answer != mb.Apply:
+            return
+
         angle = None
         from labelpc.pointcloud.Proprietary import align_room_by_walls_polygon
         for s in self.labelList.shapes:
@@ -1504,7 +1515,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.pointcloud.points[['x', 'y', 'z']] = self.pointcloud.rotate(degrees=angle)
         self.pointcloud.write(self.pointcloud.filename, overwrite=True)
         self.rotateShapes(angle)
-        self.setDirty()
+        self.saveFile()
+        self.loadFile(self.filename)
 
     def rotateShapes(self, angle):
         theta = np.radians(angle)
@@ -1517,7 +1529,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.canvas.shapes[s].points[p] = self.pointcloudToQpoint(trans)
 
     def render3d(self):
-        if not self.pptkViewerReady():
+        if not self.pointcloud.viewer_is_ready():
             self.pointcloud.render_flag = True
             self.pointcloud.viewer = None
             self.pointcloud.render()
@@ -1543,24 +1555,12 @@ class MainWindow(QtWidgets.QMainWindow):
             self.loadFile(filename)
 
     def showNextSlice(self, _value=False):
-        if not self.imageData or len(self.imageData) <= 1:
-            return
         self.sliceIdx += 1
-        if self.sliceIdx >= len(self.imageData):
-            self.sliceIdx = 0
-        self.image = QtGui.QImage.fromData(self.imageData[self.sliceIdx])
-        self.canvas.loadPixmap(QtGui.QPixmap.fromImage(self.image))
-        self.canvas.loadShapes(self.labelList.shapes)
+        self.updatePixmap()
 
     def showLastSlice(self, _value=False):
-        if not self.imageData or len(self.imageData) <= 1:
-            return
         self.sliceIdx -= 1
-        if self.sliceIdx < 0:
-            self.sliceIdx = len(self.imageData) - 1
-        self.image = QtGui.QImage.fromData(self.imageData[self.sliceIdx])
-        self.canvas.loadPixmap(QtGui.QPixmap.fromImage(self.image))
-        self.canvas.loadShapes(self.labelList.shapes)
+        self.updatePixmap()
 
     def openFile(self, _value=False):
         if not self.mayContinue():
@@ -1751,15 +1751,6 @@ class MainWindow(QtWidgets.QMainWindow):
             self.saveFile()
             return True
         else:  # answer == mb.Cancel
-            return False
-
-    def pptkViewerReady(self):
-        if not self.pointcloud.render_flag or self.pointcloud.viewer is None:
-            return False
-        try:
-            self.pointcloud.viewer.get('lookat')
-            return True
-        except ConnectionRefusedError:
             return False
 
     def errorMessage(self, title, message):
