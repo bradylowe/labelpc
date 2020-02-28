@@ -42,17 +42,21 @@ from labelpc.pointcloud.Voxelize import VoxelGrid
 
 
 # TODO:
-#   make labelList trigger annotation mode
-#   create annotations for individual slices ???
+#   Make ctrl-right-click split rack
+#   Create annotations for individual slices ???
 #   Snap to corner
 #   Snap to center
-#   tighten annotation function (tighten boxes to racks)
-#   room alignment (user input rough align AND final, automatic fine alignment)
-#   Cross hair targeting point annotations
+#   Tighten annotation function (tighten boxes to racks)
+#   Room alignment (user input rough align AND final, automatic fine alignment)
+#   Cross hair targeting point annotations (cross hairs on beam points, toggle on/off?)
+#   Snap to cross hair intersections
+#   Add distance threshold for snap functions to config file
+#   Interpolate beam positions
 #   Break rack (turn one annotation into 2 and resize each independently) (manual mode AND automatic using beams)
 #   Merge racks (turn two annotations into 1)
-#   Figure out user interface for breaking and merging racks
+#   Automatically split rack into two racks if width is approx. equal to two racks (tighten each)
 #   Rotate rack (change orientation {direction pallet goes into and out of rack})
+#   Distinguish rack orientation in annotation
 #   Create icons for buttons
 #   Create shortcuts
 
@@ -131,7 +135,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.shape_dock.setWidget(self.labelList)
 
         self.uniqLabelList = UniqueLabelQListWidget()
-        self.labelList.itemActivated.connect(self.modeSelectionChanged)
+        self.uniqLabelList.itemActivated.connect(self.modeSelectionChanged)
+        self.uniqLabelList.itemSelectionChanged.connect(self.modeSelectionChanged)
         self.uniqLabelList.setToolTip(self.tr(
             "Select label to start annotating for it. "
             "Press 'Esc' to deselect."))
@@ -286,6 +291,8 @@ class MainWindow(QtWidgets.QMainWindow):
         render_3d = action('Render points in 3D', self.render3d, None, 'render', 'Render the points in 3D')
 
         highlight_walls = action('Highlight walls', self.highlightWalls, None, 'highlight', 'Highlight walls')
+
+        view_annotation_3d = action('View Label 3D', self.viewAnnotation3d, None, 'view 3d', 'View annotation 3d')
 
         toggle_keep_prev_mode = action(
             self.tr('Keep Previous Annotation'),
@@ -488,6 +495,7 @@ class MainWindow(QtWidgets.QMainWindow):
             alignRoom=align_room,
             render3d=render_3d,
             highlightWalls=highlight_walls,
+            viewAnnotation3d=view_annotation_3d,
             #fileMenuActions=(open_, opendir, save, saveAs, close, quit),
             fileMenuActions=(open_, save, saveAs, close, quit),
             tool=(),
@@ -582,6 +590,8 @@ class MainWindow(QtWidgets.QMainWindow):
                 None,
                 hideAll,
                 showAll,
+                render_3d,
+                view_annotation_3d,
                 None,
                 zoomIn,
                 zoomOut,
@@ -975,8 +985,25 @@ class MainWindow(QtWidgets.QMainWindow):
             self.uniqLabelList.addItem(item)
 
     def modeSelectionChanged(self):
-        # Todo: enter into the proper label annotation mode according to selected item in uniqLabelList
-        pass
+        items = self.uniqLabelList.selectedItems()
+        if not items:
+            self._config['display_label_popup'] = True
+            return
+        label = items[0].data(Qt.UserRole)
+        if label not in ['beam', 'select-rack', 'drive-in-rack', 'extra-deep-rack', 'pole', 'door', 'walls', 'noise']:
+            self._config['display_label_popup'] = True
+            return
+
+        self._config['display_label_popup'] = False
+        if label in ['beam', 'pole']:
+            self.toggleDrawMode(False, createMode='point')
+        elif 'rack' in label:
+            self.toggleDrawMode(False, createMode='rectangle')
+        elif label == 'door':
+            self.toggleDrawMode(False, createMode='line')
+            self._config['display_label_popup'] = True
+        elif label in ['walls', 'noise']:
+            self.toggleDrawMode(False, createMode='polygon')
 
     def fileSearchChanged(self):
         self.importDirImages(
@@ -1199,6 +1226,19 @@ class MainWindow(QtWidgets.QMainWindow):
 
     # Callback functions:
 
+    def viewAnnotation3d(self):
+        items = self.labelList.selectedItems()
+        if items:
+            if not self.pointcloud.viewer_is_ready():
+                self.render3d()
+            points = self.labelList.get_shape_from_item(items[0]).points
+            transformed = []
+            for p in points:
+                transformed.append(self.qpointToPointcloud(p))
+            lookat = np.average(transformed, axis=0)
+            lookat = np.array((lookat[0], lookat[1], 3.0))
+            self.pointcloud.viewer.set(lookat=lookat, theta=np.pi/2., r=15.0, phi=-np.pi/2.)
+
     def newShape(self):
         """Pop-up and give focus to the label editor.
 
@@ -1228,6 +1268,22 @@ class MainWindow(QtWidgets.QMainWindow):
             self.labelList.clearSelection()
             shape = self.canvas.setLastLabel(text, flags)
             shape.group_id = group_id
+            if text in ['beam', 'pole']:
+                if text == 'beam' and self.isNearCrosshairIntersection(shape.points[0]):
+                    shape.points[0] = self.snapToCrosshairIntersection(shape.points[0])
+                else:
+                    transformed = self.qpointToPointcloud(shape.points[0])
+                    snapped = self.pointcloud.snap_to_center(transformed, 0.5)
+                    shape.points[0] = self.pointcloudToQpoint(snapped)
+            elif text == 'walls':
+                for i, p in enumerate(shape.points):
+                    transformed = self.qpointToPointcloud(p)
+                    snapped = self.pointcloud.snap_to_corner(transformed, 0.5)
+                    shape.points[i] = self.pointcloudToQpoint(snapped)
+            elif 'rack' in text:
+                box = [self.qpointToPointcloud(shape.points[0]), self.qpointToPointcloud(shape.points[1])]
+                box = self.pointcloud.tighten_to_rack(box)
+                shape.points[0], shape.points[1] = self.pointcloudToQpoint(box[0]), self.pointcloudToQpoint(box[1])
             self.addLabel(shape)
             self.actions.editMode.setEnabled(True)
             self.actions.undoLastPoint.setEnabled(False)
@@ -1471,22 +1527,13 @@ class MainWindow(QtWidgets.QMainWindow):
         # ask the use for where to save the labels
         # self.settings.setValue('window/geometry', self.saveGeometry())
 
-    def make_images_from_voxel_grid(self, axis=2):
-        if self.voxelgrid is None:
-            print('No voxel grid built to make images from')
-            return
-        bitmaps = self.voxelgrid.bitmap2d(max=2048, axis=axis)
-        # Stack 3 copies on top of each other to form RGB image (but still black and white at this point)
-        for i in range(len(bitmaps)):
-            bitmaps[i] = np.dstack((bitmaps[i], bitmaps[i], bitmaps[i]))
-        data = []
-        for m in bitmaps:
-            img = PIL.Image.fromarray(np.asarray(np.clip(m, 0, 255), dtype="uint8"))
-            buff = BytesIO()
-            img.save(buff, format="JPEG")
-            buff.seek(0)
-            data.append(buff.read())
-        return data
+    def isNearCrosshairIntersection(self, point):
+        # Todo: Check all beams to see if this point is near an intersection of beams
+        return False
+
+    def snapToCrosshairIntersection(self, point):
+        # Todo: Calculate the nearby location of beam intersection to snap to
+        return point
 
     def alignRoom(self):
         if not self.dirty:
