@@ -526,8 +526,8 @@ class PointCloud:
     def in_box_2d(self, box, points=None):
         if points is None:
             points = self.points.loc[self.showing.bools][['x', 'y']].values
-        keep = points > np.array(box[0])
-        keep[points > np.array(box[1])] = False
+        keep = points > np.array(np.min(box, axis=0))
+        keep[points > np.array(np.max(box, axis=0))] = False
         return keep.all(axis=1)
 
     @staticmethod
@@ -570,3 +570,14 @@ class PointCloud:
             if self.distance_to_line(line, p) < delta:
                 keep[i] = True
         return np.arange(len(self.points))[keep]
+
+    def snap_to_corner(self, point, delta):
+        points = self.get_points_within(delta, point)
+        return np.average(points, axis=0)
+
+    def snap_to_center(self, point, delta):
+        points = self.get_points_within(delta, point)
+        return np.average(points, axis=0)
+
+    def tighten_to_rack(self, box):
+        return box
