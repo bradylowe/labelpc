@@ -5,9 +5,13 @@ keep_prev: false
 keep_prev_scale: false
 logger_level: info
 
+select_rack: 1.1
+drive_in_rack: 2.4
+extra_deep_rack: 2.4
+
 flags: null
 label_flags: null
-labels: [walls, pole, beam, door, select-rack, drive-in-rack, extra-deep-rack, noise]
+labels: [walls, pole, beam, door, select_rack, drive_in_rack, extra_deep_rack, noise]
 file_search: null
 sort_labels: true
 validate_label: null

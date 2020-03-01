@@ -49,7 +49,6 @@ from labelpc.pointcloud.Voxelize import VoxelGrid
 #   Tighten annotation function (tighten boxes to racks)
 #   Room alignment (user input rough align AND final, automatic fine alignment)
 #   Cross hair targeting point annotations (cross hairs on beam points, toggle on/off?)
-#   Snap to cross hair intersections
 #   Add distance threshold for snap functions to config file
 #   Interpolate beam positions
 #   Break rack (turn one annotation into 2 and resize each independently) (manual mode AND automatic using beams)
@@ -1111,7 +1110,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self._config['display_label_popup'] = True
             return
         label = items[0].data(Qt.UserRole)
-        if label not in ['beam', 'select-rack', 'drive-in-rack', 'extra-deep-rack', 'pole', 'door', 'walls', 'noise']:
+        if label not in ['beam', 'select_rack', 'drive_in_rack', 'extra_deep_rack', 'pole', 'door', 'walls', 'noise']:
             self._config['display_label_popup'] = True
             return
 
@@ -1365,22 +1364,24 @@ class MainWindow(QtWidgets.QMainWindow):
 
         position MUST be in global coordinates.
         """
+        # Get the label name from the uniqLabelList selected items
         items = self.uniqLabelList.selectedItems()
         text = None
         if items:
             text = items[0].data(Qt.UserRole)
         flags = {}
         group_id = None
-        
+
+        # Get label name and group id from user in popup window
         if self._config['display_label_popup'] or not text:
             previous_text = self.labelDialog.edit.text()
-            if self.actions.createPoleMode.isEnabled() == False:
+            if not self.actions.createPoleMode.isEnabled():
                 text = "Pole"
-            elif self.actions.createBeamMode.isEnabled() == False:
+            elif not self.actions.createBeamMode.isEnabled():
                 text = "Beam"
-            elif self.actions.createWallMode.isEnabled() == False:
+            elif not self.actions.createWallMode.isEnabled():
                 text = "Wall"
-            elif self.actions.createWallsMode.isEnabled() == False:
+            elif not self.actions.createWallsMode.isEnabled():
                 text = "Walls"
             else:
                 text, flags, group_id = self.labelDialog.popUp(text)
@@ -1399,6 +1400,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.labelList.clearSelection()
             shape = self.canvas.setLastLabel(text, flags)
             shape.group_id = group_id
+            # If this is a new pole or beam, snap the annotation to the center of the object
             if text in ['beam', 'pole']:
                 if text == 'beam' and self.isNearCrosshairIntersection(shape.points[0]):
                     shape.points[0] = self.snapToCrosshairIntersection(shape.points[0])
@@ -1406,14 +1408,22 @@ class MainWindow(QtWidgets.QMainWindow):
                     transformed = self.qpointToPointcloud(shape.points[0])
                     snapped = self.pointcloud.snap_to_center(transformed, 0.5)
                     shape.points[0] = self.pointcloudToQpoint(snapped)
+            # If this is a new wall, snap the points to the corners of the walls
             elif text == 'walls':
                 for i, p in enumerate(shape.points):
                     transformed = self.qpointToPointcloud(p)
                     snapped = self.pointcloud.snap_to_corner(transformed, 0.5)
                     shape.points[i] = self.pointcloudToQpoint(snapped)
+            # If this is a new rack, split the rack into two racks if necessary and tighten box(es) to rack
             elif 'rack' in text:
-                box = [self.qpointToPointcloud(shape.points[0]), self.qpointToPointcloud(shape.points[1])]
+                box = np.array([self.qpointToPointcloud(shape.points[0]), self.qpointToPointcloud(shape.points[1])])
                 box = self.pointcloud.tighten_to_rack(box)
+                if self.isTwoRacks(text, box):
+                    box, box2 = self.splitTwoRacks(text, box)
+                    box, box2 = self.pointcloud.tighten_to_rack(box), self.pointcloud.tighten_to_rack(box2)
+                    shape2 = shape.copy()
+                    shape2.points[0], shape2.points[1] = self.pointcloudToQpoint(box2[0]), self.pointcloudToQpoint(box2[1])
+                    self.addLabel(shape2)
                 shape.points[0], shape.points[1] = self.pointcloudToQpoint(box[0]), self.pointcloudToQpoint(box[1])
             self.addLabel(shape)
             self.actions.editMode.setEnabled(True)
@@ -1423,6 +1433,21 @@ class MainWindow(QtWidgets.QMainWindow):
         else:
             self.canvas.undoLastLine()
             self.canvas.shapesBackups.pop()
+
+    def isTwoRacks(self, type, bounds):
+        dims = np.abs(bounds[1] - bounds[0])
+        return (dims / 1.9 > self._config[type]).all()
+
+    def splitTwoRacks(self, type, bounds):
+        dims = np.abs(bounds[1] - bounds[0])
+        bounds2 = bounds.copy()
+        if abs(dims[0] - self._config[type] * 2.0) < abs(dims[1] - self._config[type] * 2.0):
+            bounds[1][0] = (bounds[0][0] + bounds[1][0]) / 2.0
+            bounds2[0][0] = (bounds2[0][0] + bounds2[1][0]) / 2.0
+        else:
+            bounds[1][1] = (bounds[0][1] + bounds[1][1]) / 2.0
+            bounds2[0][1] = (bounds2[0][1] + bounds2[1][1]) / 2.0
+        return bounds, bounds2
 
     def scrollRequest(self, delta, orientation):
         units = - delta * 0.1  # natural scroll
@@ -1666,6 +1691,10 @@ class MainWindow(QtWidgets.QMainWindow):
         # Todo: Calculate the nearby location of beam intersection to snap to
         return point
 
+    def interpolateBeamPositions(self):
+        # Todo: interpolate beam positions based off of current beam positions and wall bounds
+        pass
+
     def alignRoom(self):
         if not self.dirty:
             return True
@@ -1713,7 +1742,8 @@ class MainWindow(QtWidgets.QMainWindow):
             self.pointcloud.render()
 
     def qpointToPointcloud(self, p):
-        return (p.x() * self.scale + self.offset.x(), (self.canvas.pixmap.height() - p.y()) * self.scale + self.offset.y())
+        return (p.x() * self.scale + self.offset.x(),
+                (self.canvas.pixmap.height() - p.y()) * self.scale + self.offset.y())
 
     def pointcloudToQpoint(self, p):
         x = (p[0] - self.offset.x()) / self.scale

@@ -95,8 +95,8 @@ class Canvas(QtWidgets.QWidget):
 
     @createMode.setter
     def createMode(self, value):
-        if value not in ['polygon', 'rectangle', 'circle',
-           'line', 'point', 'linestrip', 'pole', 'beam', 'wall', 'walls']:
+        if value not in ['polygon', 'rectangle', 'circle', 'line', 'point', 'linestrip',
+                         'pole', 'beam', 'wall', 'walls', 'noise', 'select_rack', 'drive_in_rack', 'extra_deep_rack']:
             raise ValueError('Unsupported createMode: %s' % value)
         self._createMode = value
 
@@ -183,17 +183,17 @@ class Canvas(QtWidgets.QWidget):
                 # Don't allow the user to draw outside the pixmap.
                 # Project the point to the pixmap's edges.
                 pos = self.intersectionPoint(self.current[-1], pos)
-            elif len(self.current) > 1 and self.createMode in ['polygon', 'walls'] and\
+            elif len(self.current) > 1 and self.createMode in ['polygon', 'walls', 'noise'] and\
                     self.closeEnough(pos, self.current[0]):
                 # Attract line to starting point and
                 # colorise to alert the user.
                 pos = self.current[0]
                 self.overrideCursor(CURSOR_POINT)
                 self.current.highlightVertex(0, Shape.NEAR_VERTEX)
-            if self.createMode in ['polygon', 'linestrip', 'walls']:
+            if self.createMode in ['polygon', 'linestrip', 'walls', 'noise']:
                 self.line[0] = self.current[-1]
                 self.line[1] = pos
-            elif self.createMode == 'rectangle':
+            elif self.createMode == 'rectangle' or 'rack' in self.createMode:
                 self.line.points = [self.current[0], pos]
                 self.line.close()
             elif self.createMode == 'circle':
@@ -310,12 +310,12 @@ class Canvas(QtWidgets.QWidget):
             if self.drawing():
                 if self.current:
                     # Add point to existing shape.
-                    if self.createMode == 'polygon' or self.createMode == 'walls':
+                    if self.createMode in ['polygon', 'walls', 'noise']:
                         self.current.addPoint(self.line[1])
                         self.line[0] = self.current[-1]
                         if self.current.isClosed():
                             self.finalise()
-                    elif self.createMode in ['rectangle', 'circle', 'line', 'wall']:
+                    elif self.createMode in ['rectangle', 'circle', 'line', 'wall'] or 'rack' in self.createMode:
                         assert len(self.current.points) == 1
                         self.current.points = self.line.points
                         self.finalise()
@@ -328,7 +328,7 @@ class Canvas(QtWidgets.QWidget):
                     # Create new shape.
                     self.current = Shape(shape_type=self.createMode)
                     self.current.addPoint(pos)
-                    if self.createMode == 'point' or self.createMode == 'pole' or self.createMode == 'beam':
+                    if self.createMode in ['point', 'pole', 'beam']:
                         self.finalise()
                     else:
                         if self.createMode == 'circle':
@@ -530,7 +530,7 @@ class Canvas(QtWidgets.QWidget):
             for s in self.selectedShapesCopy:
                 s.paint(p)
 
-        if (self.fillDrawing() and self.createMode in ['polygon', 'walls'] and
+        if (self.fillDrawing() and self.createMode in ['polygon', 'walls', 'noise'] and
                 self.current is not None and len(self.current.points) >= 2):
             drawing_shape = self.current.copy()
             drawing_shape.addPoint(self.line[1])
@@ -696,11 +696,11 @@ class Canvas(QtWidgets.QWidget):
         assert self.shapes
         self.current = self.shapes.pop()
         self.current.setOpen()
-        if self.createMode in ['polygon', 'linestrip', 'walls']:
+        if self.createMode in ['polygon', 'linestrip', 'walls', 'noise']:
             self.line.points = [self.current[-1], self.current[0]]
-        elif self.createMode in ['rectangle', 'line', 'circle', 'wall']:
+        elif self.createMode in ['rectangle', 'line', 'circle', 'wall'] or 'rack' in self.createMode:
             self.current.points = self.current.points[0:1]
-        elif self.createMode == 'point'  or self.createMode == 'pole' or self.createMode == 'beam':
+        elif self.createMode in ['beam', 'point', 'pole']:
             self.current = None
         self.drawingPolygon.emit(True)
 
