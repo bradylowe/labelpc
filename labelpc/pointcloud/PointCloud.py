@@ -580,4 +580,9 @@ class PointCloud:
         return np.average(points, axis=0)
 
     def tighten_to_rack(self, box):
-        return box
+        points = self.points.loc[self.in_box_2d(box, self.points[['x', 'y']].values)][['x', 'y', 'z']].values
+        filtered = np.random.choice(len(points), int(len(points) * 0.01))
+        points = points[filtered]
+        points = points[points.min(axis=0)[2] + 2.0 < points[:, 2]]
+        points = points[points[:, 2] < points.max(axis=0)[2] - 3.0]
+        return np.array((points.min(axis=0)[:2], points.max(axis=0)[:2]))

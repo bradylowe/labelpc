@@ -73,8 +73,7 @@ class Shape(object):
     def shape_type(self, value):
         if value is None:
             value = 'polygon'
-        if value not in ['polygon', 'rectangle', 'point', 'line', 'circle', 'linestrip',
-                         'pole', 'beam', 'wall', 'walls', 'noise', 'select_rack', 'drive_in_rack', 'extra_deep_rack']:
+        if value not in ['polygon', 'rectangle', 'point', 'line', 'circle', 'linestrip']:
             raise ValueError('Unexpected shape_type: {}'.format(value))
         self._shape_type = value
 
@@ -88,7 +87,7 @@ class Shape(object):
             self.points.append(point)
 
     def canAddPoint(self):
-        return self.shape_type in ['polygon', 'linestrip', 'walls', 'noise']
+        return self.shape_type in ['polygon', 'linestrip']
 
     def popPoint(self):
         if self.points:
@@ -124,7 +123,7 @@ class Shape(object):
             line_path = QtGui.QPainterPath()
             vrtx_path = QtGui.QPainterPath()
 
-            if self.shape_type == 'rectangle' or 'rack' in self.shape_type:
+            if self.shape_type == 'rectangle':
                 assert len(self.points) in [1, 2]
                 if len(self.points) == 2:
                     rectangle = self.getRectFromLine(*self.points)
@@ -217,7 +216,7 @@ class Shape(object):
         return rectangle
 
     def makePath(self):
-        if self.shape_type == 'rectangle' or 'rack' in self.shape_type:
+        if self.shape_type == 'rectangle':
             path = QtGui.QPainterPath()
             if len(self.points) == 2:
                 rectangle = self.getRectFromLine(*self.points)

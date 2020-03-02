@@ -341,44 +341,12 @@ class MainWindow(QtWidgets.QMainWindow):
             self.tr('Start drawing points'),
             enabled=False,
         )
-        createPoleMode = action(
-            self.tr('Annotate Poles'),
-            lambda: self.toggleDrawMode(False, createMode='pole'),
-            shortcuts['create_pole'],
-            'objects',
-            self.tr('Start annotating poles'),
-            enabled=False,
-        )
-        createBeamMode = action(
-            self.tr('Annotate Beams'),
-            lambda: self.toggleDrawMode(False, createMode='beam'),
-            shortcuts['create_pole'],
-            'objects',
-            self.tr('Start annotating beams'),
-            enabled=False,
-        )
         createLineStripMode = action(
             self.tr('Create LineStrip'),
             lambda: self.toggleDrawMode(False, createMode='linestrip'),
             shortcuts['create_linestrip'],
             'objects',
             self.tr('Start drawing linestrip. Ctrl+LeftClick ends creation.'),
-            enabled=False,
-        )
-        createWallMode = action(
-            self.tr('Annotate Wall'),
-            lambda: self.toggleDrawMode(False, createMode='wall'),
-            shortcuts['create_wall'],
-            'objects',
-            self.tr('Start annotating a wall.'),
-            enabled=False,
-        )
-        createWallsMode = action(
-            self.tr('Annotate Walls'),
-            lambda: self.toggleDrawMode(False, createMode='walls'),
-            shortcuts['create_walls'],
-            'objects',
-            self.tr('Start annotating the walls.'),
             enabled=False,
         )
         editMode = action(self.tr('Edit Polygons'), self.setEditMode,
@@ -518,11 +486,7 @@ class MainWindow(QtWidgets.QMainWindow):
             createCircleMode=createCircleMode,
             createLineMode=createLineMode,
             createPointMode=createPointMode,
-            createPoleMode=createPoleMode,
-            createBeamMode=createBeamMode,
             createLineStripMode=createLineStripMode,
-            createWallMode=createWallMode,
-            createWallsMode=createWallsMode,
             zoom=zoom, zoomIn=zoomIn, zoomOut=zoomOut, zoomOrg=zoomOrg,
             fitWindow=fitWindow, fitWidth=fitWidth,
             zoomActions=zoomActions,
@@ -554,10 +518,6 @@ class MainWindow(QtWidgets.QMainWindow):
                 createCircleMode,
                 createLineMode,
                 createPointMode,
-                createPoleMode,
-                createBeamMode,
-                createWallMode,
-                createWallsMode,
                 createLineStripMode,
                 editMode,
                 edit,
@@ -580,10 +540,6 @@ class MainWindow(QtWidgets.QMainWindow):
                 createCircleMode,
                 createLineMode,
                 createPointMode,
-                createPoleMode,
-                createBeamMode,
-                createWallMode,
-                createWallsMode,
                 createLineStripMode,
                 editMode,
             ),
@@ -707,6 +663,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.scale = None
         self.thickness = None
         self.offset = None
+        self.annotationMode = None
         self.pointcloud = PointCloud(render=False)
         self.zoom_values = {}  # key=filename, value=(zoom_mode, zoom_value)
         self.scroll_values = {
@@ -787,11 +744,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.actions.createCircleMode,
             self.actions.createLineMode,
             self.actions.createPointMode,
-            self.actions.createPoleMode,
-            self.actions.createBeamMode,
             self.actions.createLineStripMode,
-            self.actions.createWallMode,
-            self.actions.createWallsMode,
             self.actions.editMode,
         )
         utils.addActions(self.menus.edit, actions + self.actions.editMenu)
@@ -821,8 +774,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self.actions.createLineMode.setEnabled(True)
         self.actions.createPointMode.setEnabled(True)
         self.actions.createLineStripMode.setEnabled(True)
-        self.actions.createWallMode.setEnabled(True)
-        self.actions.createWallsMode.setEnabled(True)
         title = __appname__
         if self.filename is not None:
             title = '{} - {}'.format(title, self.filename)
@@ -864,6 +815,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.thickness = None
         self.scale = None
         self.offset = None
+        self.annotationMode = None
         self.pointcloud.close_viewer()
         self.pointcloud = PointCloud(render=False)
         self.canvas.resetState()
@@ -913,10 +865,6 @@ class MainWindow(QtWidgets.QMainWindow):
             self.actions.createLineMode.setEnabled(True)
             self.actions.createPointMode.setEnabled(True)
             self.actions.createLineStripMode.setEnabled(True)
-            self.actions.createWallMode.setEnabled(True)
-            self.actions.createWallsMode.setEnabled(True)
-            self.actions.createPoleMode.setEnabled(True)
-            self.actions.createBeamMode.setEnabled(True)
         else:
             if createMode == 'polygon':
                 self.actions.createMode.setEnabled(False)
@@ -925,10 +873,6 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.actions.createLineMode.setEnabled(True)
                 self.actions.createPointMode.setEnabled(True)
                 self.actions.createLineStripMode.setEnabled(True)
-                self.actions.createWallMode.setEnabled(True)
-                self.actions.createWallsMode.setEnabled(True)
-                self.actions.createPoleMode.setEnabled(True)
-                self.actions.createBeamMode.setEnabled(True)
             elif createMode == 'rectangle':
                 self.actions.createMode.setEnabled(True)
                 self.actions.createRectangleMode.setEnabled(False)
@@ -936,10 +880,6 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.actions.createLineMode.setEnabled(True)
                 self.actions.createPointMode.setEnabled(True)
                 self.actions.createLineStripMode.setEnabled(True)
-                self.actions.createWallMode.setEnabled(True)
-                self.actions.createWallsMode.setEnabled(True)
-                self.actions.createPoleMode.setEnabled(True)
-                self.actions.createBeamMode.setEnabled(True)
             elif createMode == 'line':
                 self.actions.createMode.setEnabled(True)
                 self.actions.createRectangleMode.setEnabled(True)
@@ -947,9 +887,6 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.actions.createLineMode.setEnabled(False)
                 self.actions.createPointMode.setEnabled(True)
                 self.actions.createLineStripMode.setEnabled(True)
-                self.actions.createWallsMode.setEnabled(True)
-                self.actions.createPoleMode.setEnabled(True)
-                self.actions.createBeamMode.setEnabled(True)
             elif createMode == 'point':
                 self.actions.createMode.setEnabled(True)
                 self.actions.createRectangleMode.setEnabled(True)
@@ -957,54 +894,6 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.actions.createLineMode.setEnabled(True)
                 self.actions.createPointMode.setEnabled(False)
                 self.actions.createLineStripMode.setEnabled(True)
-                self.actions.createWallMode.setEnabled(True)
-                self.actions.createWallsMode.setEnabled(True)
-                self.actions.createPoleMode.setEnabled(True)
-                self.actions.createBeamMode.setEnabled(True)
-            elif createMode == 'pole':
-                self.actions.createMode.setEnabled(True)
-                self.actions.createRectangleMode.setEnabled(True)
-                self.actions.createCircleMode.setEnabled(True)
-                self.actions.createLineMode.setEnabled(True)
-                self.actions.createPointMode.setEnabled(True)
-                self.actions.createLineStripMode.setEnabled(True)
-                self.actions.createWallMode.setEnabled(True)
-                self.actions.createWallsMode.setEnabled(True)
-                self.actions.createPoleMode.setEnabled(False)
-                self.actions.createBeamMode.setEnabled(True)
-            elif createMode == 'beam':
-                self.actions.createMode.setEnabled(True)
-                self.actions.createRectangleMode.setEnabled(True)
-                self.actions.createCircleMode.setEnabled(True)
-                self.actions.createLineMode.setEnabled(True)
-                self.actions.createPointMode.setEnabled(True)
-                self.actions.createLineStripMode.setEnabled(True)
-                self.actions.createWallMode.setEnabled(True)
-                self.actions.createWallsMode.setEnabled(True)
-                self.actions.createPoleMode.setEnabled(True)
-                self.actions.createBeamMode.setEnabled(False)
-            elif createMode == 'wall':
-                self.actions.createMode.setEnabled(True)
-                self.actions.createRectangleMode.setEnabled(True)
-                self.actions.createCircleMode.setEnabled(True)
-                self.actions.createLineMode.setEnabled(True)
-                self.actions.createPointMode.setEnabled(True)
-                self.actions.createLineStripMode.setEnabled(True)
-                self.actions.createWallMode.setEnabled(False)
-                self.actions.createWallsMode.setEnabled(True)
-                self.actions.createPoleMode.setEnabled(True)
-                self.actions.createBeamMode.setEnabled(True)
-            elif createMode == 'walls':
-                self.actions.createMode.setEnabled(True)
-                self.actions.createRectangleMode.setEnabled(True)
-                self.actions.createCircleMode.setEnabled(True)
-                self.actions.createLineMode.setEnabled(True)
-                self.actions.createPointMode.setEnabled(True)
-                self.actions.createLineStripMode.setEnabled(True)
-                self.actions.createWallMode.setEnabled(True)
-                self.actions.createWallsMode.setEnabled(False)
-                self.actions.createPoleMode.setEnabled(True)
-                self.actions.createBeamMode.setEnabled(True)
             elif createMode == "circle":
                 self.actions.createMode.setEnabled(True)
                 self.actions.createRectangleMode.setEnabled(True)
@@ -1012,10 +901,6 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.actions.createLineMode.setEnabled(True)
                 self.actions.createPointMode.setEnabled(True)
                 self.actions.createLineStripMode.setEnabled(True)
-                self.actions.createWallMode.setEnabled(True)
-                self.actions.createWallsMode.setEnabled(True)
-                self.actions.createPoleMode.setEnabled(True)
-                self.actions.createBeamMode.setEnabled(True)
             elif createMode == "linestrip":
                 self.actions.createMode.setEnabled(True)
                 self.actions.createRectangleMode.setEnabled(True)
@@ -1023,10 +908,6 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.actions.createLineMode.setEnabled(True)
                 self.actions.createPointMode.setEnabled(True)
                 self.actions.createLineStripMode.setEnabled(False)
-                self.actions.createWallMode.setEnabled(True)
-                self.actions.createWallsMode.setEnabled(True)
-                self.actions.createPoleMode.setEnabled(True)
-                self.actions.createBeamMode.setEnabled(True)
             else:
                 raise ValueError('Unsupported createMode: %s' % createMode)
         self.actions.editMode.setEnabled(not edit)
@@ -1108,13 +989,16 @@ class MainWindow(QtWidgets.QMainWindow):
         items = self.uniqLabelList.selectedItems()
         if not items:
             self._config['display_label_popup'] = True
+            self.annotationMode = None
             return
         label = items[0].data(Qt.UserRole)
         if label not in ['beam', 'select_rack', 'drive_in_rack', 'extra_deep_rack', 'pole', 'door', 'walls', 'noise']:
             self._config['display_label_popup'] = True
+            self.annotationMode = None
             return
 
         self._config['display_label_popup'] = False
+        self.annotationMode = label
         if label in ['beam', 'pole']:
             self.toggleDrawMode(False, createMode='point')
         elif 'rack' in label:
@@ -1349,15 +1233,19 @@ class MainWindow(QtWidgets.QMainWindow):
     def viewAnnotation3d(self):
         items = self.labelList.selectedItems()
         if items:
-            if not self.pointcloud.viewer_is_ready():
-                self.render3d()
             points = self.labelList.get_shape_from_item(items[0]).points
             transformed = []
             for p in points:
                 transformed.append(self.qpointToPointcloud(p))
             lookat = np.average(transformed, axis=0)
-            lookat = np.array((lookat[0], lookat[1], 3.0))
-            self.pointcloud.viewer.set(lookat=lookat, theta=np.pi/2., r=15.0, phi=-np.pi/2.)
+            self.viewLocation3d(lookat)
+
+    def viewLocation3d(self, location):
+        if not self.pointcloud.viewer_is_ready():
+            self.render3d()
+        if len(location) < 3:
+            location = np.array((location[0], location[1], 3.0))
+        self.pointcloud.viewer.set(lookat=location, theta=np.pi/4., r=15.0, phi=-np.pi/2.)
 
     def newShape(self):
         """Pop-up and give focus to the label editor.
@@ -1375,16 +1263,7 @@ class MainWindow(QtWidgets.QMainWindow):
         # Get label name and group id from user in popup window
         if self._config['display_label_popup'] or not text:
             previous_text = self.labelDialog.edit.text()
-            if not self.actions.createPoleMode.isEnabled():
-                text = "Pole"
-            elif not self.actions.createBeamMode.isEnabled():
-                text = "Beam"
-            elif not self.actions.createWallMode.isEnabled():
-                text = "Wall"
-            elif not self.actions.createWallsMode.isEnabled():
-                text = "Walls"
-            else:
-                text, flags, group_id = self.labelDialog.popUp(text)
+            text, flags, group_id = self.labelDialog.popUp(text)
             if not text:
                 self.labelDialog.edit.setText(previous_text)
 
@@ -1401,15 +1280,22 @@ class MainWindow(QtWidgets.QMainWindow):
             shape = self.canvas.setLastLabel(text, flags)
             shape.group_id = group_id
             # If this is a new pole or beam, snap the annotation to the center of the object
-            if text in ['beam', 'pole']:
-                if text == 'beam' and self.isNearCrosshairIntersection(shape.points[0]):
-                    shape.points[0] = self.snapToCrosshairIntersection(shape.points[0])
+            if text == 'beam':
+                self.viewLocation3d(self.qpointToPointcloud(shape.points[0]))
+                intersection = self.nearestCrosshairIntersection(shape.points[0])
+                if len(intersection):
+                    print('Snapping to pole intersection')
+                    shape.points[0] = self.pointcloudToQpoint(intersection)
                 else:
                     transformed = self.qpointToPointcloud(shape.points[0])
                     snapped = self.pointcloud.snap_to_center(transformed, 0.5)
                     shape.points[0] = self.pointcloudToQpoint(snapped)
+            if text == 'pole':
+                transformed = self.qpointToPointcloud(shape.points[0])
+                snapped = self.pointcloud.snap_to_center(transformed, 0.5)
+                shape.points[0] = self.pointcloudToQpoint(snapped)
             # If this is a new wall, snap the points to the corners of the walls
-            elif text == 'walls':
+            elif text in ['wall', 'walls']:
                 for i, p in enumerate(shape.points):
                     transformed = self.qpointToPointcloud(p)
                     snapped = self.pointcloud.snap_to_corner(transformed, 0.5)
@@ -1419,6 +1305,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 box = np.array([self.qpointToPointcloud(shape.points[0]), self.qpointToPointcloud(shape.points[1])])
                 box = self.pointcloud.tighten_to_rack(box)
                 if self.isTwoRacks(text, box):
+                    # Todo: figure out why only one box is rendered when the box is split
                     box, box2 = self.splitTwoRacks(text, box)
                     box, box2 = self.pointcloud.tighten_to_rack(box), self.pointcloud.tighten_to_rack(box2)
                     shape2 = shape.copy()
@@ -1433,21 +1320,6 @@ class MainWindow(QtWidgets.QMainWindow):
         else:
             self.canvas.undoLastLine()
             self.canvas.shapesBackups.pop()
-
-    def isTwoRacks(self, type, bounds):
-        dims = np.abs(bounds[1] - bounds[0])
-        return (dims / 1.9 > self._config[type]).all()
-
-    def splitTwoRacks(self, type, bounds):
-        dims = np.abs(bounds[1] - bounds[0])
-        bounds2 = bounds.copy()
-        if abs(dims[0] - self._config[type] * 2.0) < abs(dims[1] - self._config[type] * 2.0):
-            bounds[1][0] = (bounds[0][0] + bounds[1][0]) / 2.0
-            bounds2[0][0] = (bounds2[0][0] + bounds2[1][0]) / 2.0
-        else:
-            bounds[1][1] = (bounds[0][1] + bounds[1][1]) / 2.0
-            bounds2[0][1] = (bounds2[0][1] + bounds2[1][1]) / 2.0
-        return bounds, bounds2
 
     def scrollRequest(self, delta, orientation):
         units = - delta * 0.1  # natural scroll
@@ -1683,17 +1555,41 @@ class MainWindow(QtWidgets.QMainWindow):
         # ask the use for where to save the labels
         # self.settings.setValue('window/geometry', self.saveGeometry())
 
-    def isNearCrosshairIntersection(self, point):
-        # Todo: Check all beams to see if this point is near an intersection of beams
-        return False
-
-    def snapToCrosshairIntersection(self, point):
-        # Todo: Calculate the nearby location of beam intersection to snap to
-        return point
+    def nearestCrosshairIntersection(self, point, threshold=0.3):
+        beams = []
+        for item, shape in self.labelList.itemsToShapes:
+            if shape.label == 'beam':
+                beams.append(self.qpointToPointcloud(shape.points[0]))
+        px, py = self.qpointToPointcloud(point)
+        intersect_x, intersect_y = None, None
+        for x, y in beams:
+            if abs(x - px) < threshold:
+                intersect_x = x
+            if abs(y - py) < threshold:
+                intersect_y = y
+        if intersect_x is not None and intersect_y is not None:
+            return [intersect_x, intersect_y]
+        else:
+            return []
 
     def interpolateBeamPositions(self):
         # Todo: interpolate beam positions based off of current beam positions and wall bounds
         pass
+
+    def isTwoRacks(self, type, bounds):
+        dims = np.abs(bounds[1] - bounds[0])
+        return (dims / 1.9 > self._config[type]).all()
+
+    def splitTwoRacks(self, type, bounds):
+        dims = np.abs(bounds[1] - bounds[0])
+        bounds2 = bounds.copy()
+        if abs(dims[0] - self._config[type] * 2.0) < abs(dims[1] - self._config[type] * 2.0):
+            bounds[1][0] = (bounds[0][0] + bounds[1][0]) / 2.0
+            bounds2[0][0] = (bounds2[0][0] + bounds2[1][0]) / 2.0
+        else:
+            bounds[1][1] = (bounds[0][1] + bounds[1][1]) / 2.0
+            bounds2[0][1] = (bounds2[0][1] + bounds2[1][1]) / 2.0
+        return bounds, bounds2
 
     def alignRoom(self):
         if not self.dirty:
