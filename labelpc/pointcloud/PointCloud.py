@@ -6,6 +6,7 @@ import pptk
 import os
 
 from labelpc.pointcloud.Mask import Mask
+from labelpc.pointcloud.Voxelize import VoxelGrid
 
 
 class PointCloud:
@@ -581,8 +582,14 @@ class PointCloud:
 
     def tighten_to_rack(self, box):
         points = self.points.loc[self.in_box_2d(box, self.points[['x', 'y']].values)][['x', 'y', 'z']].values
-        filtered = np.random.choice(len(points), int(len(points) * 0.01))
+        filtered = points[:, 2] > 3.0
+        filtered[points[:, 2] > 7.0] = False
+        if np.sum(filtered) > 1000:
+            points = points[filtered]
+        vg = VoxelGrid(points, (0.02, 0.02, 10000.0))
+        scores = np.zeros(len(points))
+        for v in vg.occupied():
+            scores[vg.indices(v)] = vg.counts(v)
+        filtered = scores > np.percentile(scores, 50)
         points = points[filtered]
-        points = points[points.min(axis=0)[2] + 2.0 < points[:, 2]]
-        points = points[points[:, 2] < points.max(axis=0)[2] - 3.0]
         return np.array((points.min(axis=0)[:2], points.max(axis=0)[:2]))

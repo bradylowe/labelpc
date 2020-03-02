@@ -44,6 +44,7 @@ from labelpc.pointcloud.Voxelize import VoxelGrid
 # TODO:
 #   Make ctrl-right-click split rack
 #   Create annotations for individual slices ???
+#   Make 3d viewer highlight points when editing annotation
 #   Snap to corner
 #   Snap to center
 #   Tighten annotation function (tighten boxes to racks)
@@ -1282,8 +1283,8 @@ class MainWindow(QtWidgets.QMainWindow):
             # If this is a new pole or beam, snap the annotation to the center of the object
             if text == 'beam':
                 self.viewLocation3d(self.qpointToPointcloud(shape.points[0]))
-                intersection = self.nearestCrosshairIntersection(shape.points[0])
-                if len(intersection):
+                intersection, intersected = self.nearestCrosshairIntersection(shape.points[0])
+                if intersected:
                     print('Snapping to pole intersection')
                     shape.points[0] = self.pointcloudToQpoint(intersection)
                 else:
@@ -1561,16 +1562,16 @@ class MainWindow(QtWidgets.QMainWindow):
             if shape.label == 'beam':
                 beams.append(self.qpointToPointcloud(shape.points[0]))
         px, py = self.qpointToPointcloud(point)
-        intersect_x, intersect_y = None, None
+        intersection = np.array((px, py))
+        intersected = False
         for x, y in beams:
             if abs(x - px) < threshold:
-                intersect_x = x
+                intersection[0] = x
+                intersected = True
             if abs(y - py) < threshold:
-                intersect_y = y
-        if intersect_x is not None and intersect_y is not None:
-            return [intersect_x, intersect_y]
-        else:
-            return []
+                intersection[1] = y
+                intersected = True
+        return intersection, intersected
 
     def interpolateBeamPositions(self):
         # Todo: interpolate beam positions based off of current beam positions and wall bounds
