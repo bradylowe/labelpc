@@ -25,6 +25,7 @@ class Canvas(QtWidgets.QWidget):
     nextSliceRequest = QtCore.Signal()
     lastSliceRequest = QtCore.Signal()
     newShape = QtCore.Signal()
+    splitRack = QtCore.Signal()
     selectionChanged = QtCore.Signal(list)
     shapeMoved = QtCore.Signal()
     drawingPolygon = QtCore.Signal(bool)
@@ -347,7 +348,15 @@ class Canvas(QtWidgets.QWidget):
             self.repaint()
 
     def mouseReleaseEvent(self, ev):
+        if QT5:
+            pos = self.transformPos(ev.localPos())
+        else:
+            pos = self.transformPos(ev.posF())
         if ev.button() == QtCore.Qt.RightButton:
+            if int(ev.modifiers()) == QtCore.Qt.ControlModifier:
+                self.prevPoint = pos
+                self.splitRack.emit()
+                return
             menu = self.menus[len(self.selectedShapesCopy) > 0]
             self.restoreCursor()
             if not menu.exec_(self.mapToGlobal(ev.pos())) \
