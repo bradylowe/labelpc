@@ -42,18 +42,25 @@ from labelpc.pointcloud.Voxelize import VoxelGrid
 
 
 # TODO:
-#   Create annotations for individual slices ???
+#   --- BYU students:
 #   Snap to corner
 #   Snap to center
-#   Detect intersections of labels
-#   Room alignment (user input rough align AND final, automatic fine alignment)
-#   Cross hair targeting point annotations (cross hairs on beam points, toggle on/off?)
-#   Add distance threshold for snap functions to config file
-#   Interpolate beam positions
+#   --- Brady:
+#   Create annotations for individual slices ???
+#   Detect intersections (rack-rack, rack-wall, rack-noise)
+#   Add distance threshold for snap functions to config file (snapToCenter, snapToCorner, rackSep, rackSplit)
 #   Break rack (turn one annotation into 2 and resize each independently) (manual mode AND automatic using beams)
 #   Merge racks (turn two annotations into 1)
 #   Rotate rack (change orientation {direction pallet goes into and out of rack})
-#   Distinguish rack orientation in annotation
+#   Detect rack orientation in annotation
+#   View only points in selected annotation (3d viewer)
+#   Check fine resolution limit
+#   --- Austin:
+#   Interpolate beam positions inside wall bounds or canvas bounds
+#   Implement "highlightSlice" in GUI 2 just like in GUI 1
+#   Color one side of rectangle a different color based on group ID
+#   Toggle individual annotations on/off (turn off SHOWALL)
+#   Draw crosshairs on beams that span the canvas (toggle on/off)
 #   Create icons for buttons
 #   Create shortcuts
 

@@ -61,9 +61,14 @@ class VoxelGrid:
 
         # Sort the points into voxels
         sorted_points = defaultdict(list)
-        for i in trange(len(self.points), desc='Building voxel grid'):
-            idx[i] = tuple(idx[i])
-            sorted_points[idx[i]].append(i)
+        if len(self.points) > 1000000:
+            for i in trange(len(self.points), desc='Building voxel grid'):
+                idx[i] = tuple(idx[i])
+                sorted_points[idx[i]].append(i)
+        else:
+            for i in range(len(self.points)):
+                idx[i] = tuple(idx[i])
+                sorted_points[idx[i]].append(i)
 
         return idx, sorted_points
 
