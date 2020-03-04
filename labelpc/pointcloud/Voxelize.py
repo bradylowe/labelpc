@@ -210,6 +210,31 @@ class VoxelGrid:
         max_idx = self.index(self.max_corner())
         return [(i, j, k) for i in range(min_idx[0], max_idx[0]+1) for j in range(min_idx[1], max_idx[1]+1) for k in range(min_idx[2], max_idx[2]+1)]
 
+    def bitmapFromSlice(self, max=None, scores=None, min_idx=None, max_idx=None):
+        """
+        Return an array of integers indicating the number of points in each voxel in the grid. This array is
+        3-dimensional, spanning all the voxels in the grid. If max is not None, then adjust the values in the
+        bitmap to have the largest value equal to max. This bitmap can be fed directly into pyqtgraph.image() function.
+        If the user passes per-point scores into this function, then those scores will be used to create the bitmap,
+        otherwise the value will be set to the max value for all occupied voxels.
+        """
+        if min_idx is None:
+            min_idx = np.array(self.index(self.min_corner()))
+        if max_idx is None:
+            max_idx = np.array(self.index(self.max_corner()))
+        range_idx = max_idx - min_idx + 1
+        bitmap = np.zeros(range_idx[:2], dtype=int)
+        if scores is None:
+            for v in self.occupied():
+                i, j, _ = np.array(v) - min_idx
+                #bitmap[i][range_idx[1] - j - 1][k] = self.counts(v)
+                bitmap[i][range_idx[1] - j - 1] = max
+        else:
+            for v in self.occupied():
+                i, j, k = np.array(v) - min_idx
+                bitmap[i][range_idx[1] - j - 1] = np.average(scores[self.indices(v)])
+        return np.swapaxes(bitmap, 0, 1)
+
     def bitmap3d(self, max=None, swapaxes=True, scores=None):
         """
         Return an array of integers indicating the number of points in each voxel in the grid. This array is
@@ -252,7 +277,6 @@ class VoxelGrid:
                 print('Invalid axis choice')
                 return []
         return maps
-
 
     def strip(self, center, radius=-1.0, axis=2):
         """

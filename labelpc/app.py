@@ -5,6 +5,7 @@ import os
 import os.path as osp
 import re
 import webbrowser
+from tqdm import tqdm, trange
 
 import PIL.Image
 from io import BytesIO
@@ -48,19 +49,18 @@ from labelpc.pointcloud.Voxelize import VoxelGrid
 #   --- Brady:
 #   Create annotations for individual slices ???
 #   Detect intersections (rack-rack, rack-wall, rack-noise)
-#   Add distance threshold for snap functions to config file (snapToCenter, snapToCorner, rackSep, rackSplit)
 #   Break rack (turn one annotation into 2 and resize each independently) (manual mode AND automatic using beams)
 #   Merge racks (turn two annotations into 1)
 #   Rotate rack (change orientation {direction pallet goes into and out of rack})
 #   Detect rack orientation in annotation
-#   View only points in selected annotation (3d viewer)
 #   Check fine resolution limit
 #   --- Austin:
+#   Add distance threshold for snap functions to config file (snapToCenter, snapToCorner, rackSep, rackSplit)
+#   Draw crosshairs on beams that span the canvas (toggle on/off)
 #   Interpolate beam positions inside wall bounds or canvas bounds
 #   Implement "highlightSlice" in GUI 2 just like in GUI 1
 #   Color one side of rectangle a different color based on group ID
 #   Toggle individual annotations on/off (turn off SHOWALL)
-#   Draw crosshairs on beams that span the canvas (toggle on/off)
 #   Create icons for buttons
 #   Create shortcuts
 
@@ -306,7 +306,7 @@ class MainWindow(QtWidgets.QMainWindow):
                                  'Split the racks that are broken up due to proximity to support beams')
 
         merge_racks = action('Merge Racks', self.unsplitRacks, None, 'merge selected racks',
-                             'Merge the selected racks into a single rack (undo rack split).')
+                             'Merge the selected racks into a single rack (undo rack split)')
 
         toggle_keep_prev_mode = action(
             self.tr('Keep Previous Annotation'),
@@ -688,6 +688,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.thickness = None
         self.offset = None
         self.annotationMode = None
+        self.imageData = None
+        self.sliceIndices = None
         self.pointcloud = PointCloud(render=False)
         self.zoom_values = {}  # key=filename, value=(zoom_mode, zoom_value)
         self.scroll_values = {
@@ -840,6 +842,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.scale = None
         self.offset = None
         self.annotationMode = None
+        self.sliceIndices = None
+        self.imageData = None
         self.pointcloud.close_viewer()
         self.pointcloud = PointCloud(render=False)
         self.canvas.resetState()
@@ -1259,12 +1263,18 @@ class MainWindow(QtWidgets.QMainWindow):
     def viewAnnotation3d(self):
         items = self.labelList.selectedItems()
         if items:
-            points = self.labelList.get_shape_from_item(items[0]).points
+            shape = self.labelList.get_shape_from_item(items[0])
             transformed = []
-            for p in points:
+            for p in shape.points:
                 transformed.append(self.qpointToPointcloud(p))
             lookat = np.average(transformed, axis=0)
             self.viewLocation3d(lookat)
+            if len(transformed) == 1:
+                show = self.pointcloud.get_points_within(0.1, transformed[0], return_mask=True)
+                self.pointcloud.render(self.pointcloud.select(show, highlighted=False))
+            elif len(transformed) == 2:
+                show = self.pointcloud.in_box_2d(transformed)
+                self.pointcloud.render(self.pointcloud.select(show, highlighted=False))
 
     def viewLocation3d(self, location):
         if not self.pointcloud.viewer_is_ready():
@@ -1431,8 +1441,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self.lastOpenDir = osp.dirname(filename)
         self.status(self.tr('Loading points from file'))
         self.loadPointCloud(filename)
-        self.status(self.tr('Building voxel grid'))
-        self.buildVoxelGrid()
         self.status(self.tr('Building pixel maps'))
         self.buildImageData()
         self.updatePixmap()
@@ -1471,20 +1479,28 @@ class MainWindow(QtWidgets.QMainWindow):
         self.pointcloud.load(filename, self.max_points)
         self.status(self.tr("Loaded %s") % osp.basename(filename))
 
-    def buildVoxelGrid(self):
-        self.voxelgrid = VoxelGrid(self.pointcloud.points.loc[self.pointcloud.showing.bools][['x', 'y', 'z']].values,
-                                   (self.scale, self.scale, self.thickness))
-        offx, offy = self.voxelgrid.min_corner()[:2]
-        self.offset = QtCore.QPointF(offx, offy)
-
-    def buildImageData(self, scores=None, axis=2):
-        if self.voxelgrid is None:
-            logger.warn('No voxel grid built to make images from')
-            return
-        bitmaps = self.voxelgrid.bitmap2d(max=255, axis=axis, scores=scores)
+    def buildImageData(self, scores=None):
+        bitmaps = []
+        points = self.pointcloud.points.loc[self.pointcloud.showing.bools][['x', 'y', 'z']].values
+        min_point, max_point = points.min(axis=0), points.max(axis=0)
+        min_idx, max_idx = (min_point / self.scale).astype(int), (max_point / self.scale).astype(int)
+        slices = VoxelGrid(points, (10000., 10000., self.thickness))
+        self.offset = QtCore.QPointF(min_idx[0], min_idx[1])
+        self.sliceIndices = []
+        for v in tqdm(slices.all(), desc='Building bitmaps from point cloud'):
+            if not len(slices.indices(v)):
+                continue
+            self.sliceIndices.append(slices.indices(v))
+            vg = VoxelGrid(self.pointcloud.points.loc[self.sliceIndices[-1]][['x', 'y', 'z']].values,
+                           (self.scale, self.scale, max_point[2] + self.thickness / 2.0))
+            if scores is not None:
+                cur_scores = scores[self.sliceIndices[-1]]
+            else:
+                cur_scores = None
+            bitmaps.append(vg.bitmapFromSlice(max=255, scores=cur_scores, min_idx=min_idx, max_idx=max_idx))
         self.imageData = []
         # Create images from numpy arrays
-        for m in bitmaps:
+        for m in tqdm(bitmaps, desc='Building image data from bitmaps'):
             img = PIL.Image.fromarray(np.asarray(m, dtype="uint8"))
             buff = BytesIO()
             img.save(buff, format="JPEG")
@@ -1739,7 +1755,7 @@ class MainWindow(QtWidgets.QMainWindow):
         if not self.pointcloud.viewer_is_ready():
             self.pointcloud.render_flag = True
             self.pointcloud.viewer = None
-            self.pointcloud.render()
+        self.pointcloud.render()
 
     def qpointToPointcloud(self, p):
         return (p.x() * self.scale + self.offset.x(),
