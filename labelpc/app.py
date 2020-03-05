@@ -49,11 +49,10 @@ from labelpc.pointcloud.Voxelize import VoxelGrid
 #   --- Brady:
 #   Create annotations for individual slices ???
 #   Detect intersections (rack-rack, rack-wall, rack-noise)
-#   Break rack (turn one annotation into 2 and resize each independently) (manual mode AND automatic using beams)
+#   Break rack (automatic) (turn one annotation into 2 and resize each independently)
 #   Merge racks (turn two annotations into 1)
 #   Rotate rack (change orientation {direction pallet goes into and out of rack})
 #   Detect rack orientation in annotation
-#   Check fine resolution limit
 #   --- Austin:
 #   Add distance threshold for snap functions to config file (snapToCenter, snapToCorner, rackSep, rackSplit)
 #   Draw crosshairs on beams that span the canvas (toggle on/off)
@@ -1285,7 +1284,6 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def newShape(self):
         """Pop-up and give focus to the label editor.
-
         position MUST be in global coordinates.
         """
         # Get the label name from the uniqLabelList selected items
@@ -1317,6 +1315,7 @@ class MainWindow(QtWidgets.QMainWindow):
             shape.group_id = group_id
             # If this is a new pole or beam, snap the annotation to the center of the object
             if text == 'beam':
+                # Snap beam to beam intersection or to nearest beam
                 intersection, intersected = self.nearestCrosshairIntersection(shape.points[0])
                 if intersected:
                     print('Snapping to pole intersection')
@@ -1325,6 +1324,9 @@ class MainWindow(QtWidgets.QMainWindow):
                     transformed = self.qpointToPointcloud(shape.points[0])
                     snapped = self.pointcloud.snap_to_center(transformed, 0.5)
                     shape.points[0] = self.pointcloudToQpoint(snapped)
+                # Check for racks that this beam breaks and break them
+
+                # Look at the new beam in the 3d viewer
                 if self.pointcloud.viewer_is_ready():
                     self.viewLocation3d(self.qpointToPointcloud(shape.points[0]))
             if text == 'pole':
@@ -1342,7 +1344,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 box = np.array([self.qpointToPointcloud(shape.points[0]), self.qpointToPointcloud(shape.points[1])])
                 inbox = self.pointcloud.in_box_2d(box)
                 if not np.sum(inbox):
-                    print('No points selected')
+                    print('No points contained in this rack')
                     return
                 box = self.pointcloud.tighten_to_rack(box)
                 inbox = self.pointcloud.in_box_2d(box)
@@ -1646,7 +1648,7 @@ class MainWindow(QtWidgets.QMainWindow):
         racks[0].points[1] = self.pointcloudToQpoint(np.max(points, axis=0))
         self.updatePixmap()
 
-    def splitRack(self, pos=None, rack=None):
+    def splitRack(self, rack=None, pos=None):
         if pos is None:
             pos = self.canvas.prevPoint
         if rack is None:
@@ -1658,8 +1660,13 @@ class MainWindow(QtWidgets.QMainWindow):
             return
         newRack = rack.copy()
         dims = np.array(self.qpointToPointcloud(rack.points[0])) - np.array(self.qpointToPointcloud(rack.points[1]))
-        # Todo: make this check for orientation better than checking for longest dimension
-        if np.abs(dims[0]) > np.abs(dims[1]):
+        orientation = rack.group_id
+        if orientation is None:
+            if np.abs(dims[0]) > np.abs(dims[1]):
+                orientation = 0
+            else:
+                orientation = 1
+        if orientation % 2 == 0:
             rack.points[1].setX(pos.x() - 0.2)
             newRack.points[0].setX(pos.x() + 0.2)
         else:
@@ -1689,12 +1696,12 @@ class MainWindow(QtWidgets.QMainWindow):
                         if abs(y_c - shape.points[0].y()) < y_dim / 2.0 + 2.0:
                             pos = shape.points[0]
                             pos.setY(y_c)
-                            self.splitRack(pos, rack)
+                            self.splitRack(rack, pos)
                     elif rack.points[0].y() < shape.points[0].y() < rack.points[1].y():
                         if abs(x_c - shape.points[0].x()) < x_dim / 2.0 + 2.0:
                             pos = shape.points[0]
                             pos.setX(x_c)
-                            self.splitRack(pos, rack)
+                            self.splitRack(rack, pos)
 
     def isTwoRacks(self, type, bounds):
         dims = np.abs(bounds[1] - bounds[0])
