@@ -244,6 +244,16 @@ class MainWindow(QtWidgets.QMainWindow):
             self.tr(u'Show previous slice of point cloud'),
             enabled=False,
         )
+        highlight_slice = action(self.tr('Highlight Slice'), self.highlightSlice, shortcuts['highlight_slice'],
+                                 'highlight', self.tr('Highlight the currently showing slice of the point cloud'),
+                                 
+                                 enabled=False)
+
+        check_highlight_slice = action(self.tr('Highlight Slice'), self.checkHighlightSlice, shortcuts['highlight_slice'],
+                                 'eye', self.tr('Highlight the currently showing slice of the point cloud'),
+                                 checkable=True,
+                                 enabled=False)
+        
         save = action(self.tr('&Save'),
                       self.saveFile, shortcuts['save'], 'save',
                       self.tr('Save labels to file'), enabled=False)
@@ -505,6 +515,8 @@ class MainWindow(QtWidgets.QMainWindow):
             fitWindow=fitWindow, fitWidth=fitWidth,
             zoomActions=zoomActions,
             showNextSlice=showNextSlice, showLastSlice=showLastSlice,
+            highlightSlice=highlight_slice,
+            checkHighlightSlice=check_highlight_slice,
             alignRoom=align_room,
             render3d=render_3d,
             highlightWalls=highlight_walls,
@@ -564,6 +576,10 @@ class MainWindow(QtWidgets.QMainWindow):
                 editMode,
             ),
             onShapesPresent=(saveAs, hideAll, showAll),
+            on3dViewerActive=(
+                highlight_slice,
+                check_highlight_slice,
+            ),
         )
 
         self.canvas.edgeSelected.connect(self.canvasShapeEdgeSelected)
@@ -610,6 +626,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 hideAll,
                 showAll,
                 render_3d,
+                check_highlight_slice,
                 view_annotation_3d,
                 None,
                 zoomIn,
@@ -809,12 +826,16 @@ class MainWindow(QtWidgets.QMainWindow):
         else:
             self.actions.deleteFile.setEnabled(False)
 
-    def toggleActions(self, value=True):
+    def toggleActions(self, viewer=None, value=True):
         """Enable/Disable widgets which depend on an opened image."""
         for z in self.actions.zoomActions:
             z.setEnabled(value)
         for action in self.actions.onLoadActive:
             action.setEnabled(value)
+        if viewer is not None:
+            for action in self.actions.on3dViewerActive:
+                action.setEnabled(viewer)
+        
 
     def canvasShapeEdgeSelected(self, selected, shape):
         self.actions.addPointToEdge.setEnabled(
@@ -846,6 +867,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.pointcloud.close_viewer()
         self.pointcloud = PointCloud(render=False)
         self.canvas.resetState()
+        self.highlightSliceOnScroll = False
 
     def currentItem(self):
         items = self.labelList.selectedItems()
@@ -1412,6 +1434,16 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.scrollBars[Qt.Vertical].value() + y_shift,
             )
 
+    def highlightSlice(self):
+        if not self.pointcloud.viewer_is_ready():
+            self.toggleActions(viewer=False)
+            return
+        self.pointcloud.highlight(self.pointcloud.select(indices=self.sliceIndices[self.sliceIdx],
+                                                         showing=True, highlighted=False))
+
+    def checkHighlightSlice(self):
+        self.highlightSliceOnScroll = True
+
     def setFitWindow(self, value=True):
         if value:
             self.actions.fitWidth.setChecked(False)
@@ -1509,6 +1541,14 @@ class MainWindow(QtWidgets.QMainWindow):
             buff.seek(0)
             self.imageData.append(buff.read())
 
+    def update3dViewer(self, values=None):
+        if self.pointcloud.viewer_is_ready():
+            self.pointcloud.render(showing=True)
+            if values is not None:
+                self.pointcloud.viewer.attributes(values)
+        else:
+            self.toggleActions(viewer=False)
+
     def updatePixmap(self):
         if not self.imageData:
             return
@@ -1519,6 +1559,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.image = QtGui.QImage.fromData(self.imageData[self.sliceIdx])
         self.canvas.loadPixmap(QtGui.QPixmap.fromImage(self.image))
         self.canvas.loadShapes(self.labelList.shapes)
+        if self.highlightSliceOnScroll:
+            self.highlightSlice()
 
     def loadLabelsFile(self, filename):
         self.status(self.tr("Loading %s...") % osp.basename(str(filename)))
