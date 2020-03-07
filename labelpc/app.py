@@ -57,7 +57,6 @@ from labelpc.pointcloud.Voxelize import VoxelGrid
 #   Add distance threshold for snap functions to config file (snapToCenter, snapToCorner, rackSep, rackSplit)
 #   Draw crosshairs on beams that span the canvas (toggle on/off)
 #   Interpolate beam positions inside wall bounds or canvas bounds
-#   Implement "highlightSlice" in GUI 2 just like in GUI 1
 #   Color one side of rectangle a different color based on group ID
 #   Toggle individual annotations on/off (turn off SHOWALL)
 #   Create icons for buttons
@@ -124,7 +123,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.labelList = LabelQListWidget()
         self.labelList.itemActivated.connect(self.labelSelectionChanged)
         self.labelList.itemSelectionChanged.connect(self.labelSelectionChanged)
-        self.labelList.itemDoubleClicked.connect(self.editLabel)
+        self.labelList.itemDoubleClicked.connect(self.toggleIndivPolygon)
         # Connect to itemChanged to detect checkbox changes.
         self.labelList.itemChanged.connect(self.labelItemChanged)
         self.labelList.setDragDropMode(
@@ -136,6 +135,7 @@ class MainWindow(QtWidgets.QMainWindow):
         )
         self.shape_dock.setObjectName('Labels')
         self.shape_dock.setWidget(self.labelList)
+        #self.shape_dock.itemChanged.connect(self.toggleIndivPolygon)
 
         self.uniqLabelList = UniqueLabelQListWidget()
         self.uniqLabelList.itemActivated.connect(self.modeSelectionChanged)
@@ -209,7 +209,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 features = features | QtWidgets.QDockWidget.DockWidgetMovable
             getattr(self, dock).setFeatures(features)
             if self._config[dock]['show'] is False:
-                getattr(self, dock).setVisible(False)
+                getattr(self, dock).setInvisible(False)
 
         self.addDockWidget(Qt.RightDockWidgetArea, self.flag_dock)
         self.addDockWidget(Qt.RightDockWidgetArea, self.label_dock)
@@ -381,6 +381,7 @@ class MainWindow(QtWidgets.QMainWindow):
         delete = action(self.tr('Delete Polygons'), self.deleteSelectedShape,
                         shortcuts['delete_polygon'], 'cancel',
                         self.tr('Delete the selected polygons'), enabled=False)
+        
         copy = action(self.tr('Duplicate Polygons'), self.copySelectedShape,
                       shortcuts['duplicate_polygon'], 'copy',
                       self.tr('Create a duplicate of the selected polygons'),
@@ -1277,7 +1278,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def labelItemChanged(self, item):
         shape = self.labelList.get_shape_from_item(item)
-        self.canvas.setShapeVisible(shape, item.checkState() == Qt.Checked)
+        self.canvas.setShapeVisible(shape)
 
     # Callback functions:
 
@@ -1459,6 +1460,18 @@ class MainWindow(QtWidgets.QMainWindow):
     def togglePolygons(self, value):
         for item, shape in self.labelList.itemsToShapes:
             item.setCheckState(Qt.Checked if value else Qt.Unchecked)
+
+    def toggleIndivPolygon(self, item=None):
+        if item is None:
+            return
+        shape = self.labelList.get_shape_from_item(item)
+        #item.setCheckState(Qt.Checked if item.checkState() == Qt.Unchecked else Qt.Unchecked)
+        if (self.canvas.getVisible(shape)):
+            self.canvas.setShapeInvisible(shape)
+            
+        else:
+            self.canvas.setShapeVisible(shape)
+            
 
     def loadFile(self, filename):
         # changing fileListWidget loads file

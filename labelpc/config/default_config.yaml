@@ -87,6 +87,7 @@ shortcuts:
   create_walls: null
   create_linestrip: null
   highlight_slice: null
+  display_polygon: null
   edit_polygon: Ctrl+J
   delete_polygon: Delete
   duplicate_polygon: Ctrl+D

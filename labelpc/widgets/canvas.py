@@ -739,9 +739,16 @@ class Canvas(QtWidgets.QWidget):
         self.hEdge = None
         self.repaint()
 
-    def setShapeVisible(self, shape, value):
-        self.visible[shape] = value
+    def setShapeVisible(self, shape):
+        self.visible[shape] = True
         self.repaint()
+
+    def setShapeInvisible(self, shape):
+        self.visible[shape] = False
+        self.repaint()
+
+    def getVisible(self, shape):
+        return self.visible[shape]
 
     def overrideCursor(self, cursor):
         self.restoreCursor()
