@@ -58,7 +58,7 @@ from labelpc.pointcloud.Voxelize import VoxelGrid
 #   Draw crosshairs on beams that span the canvas (toggle on/off)
 #   Interpolate beam positions inside wall bounds or canvas bounds
 #   Color one side of rectangle a different color based on group ID
-#   Toggle individual annotations on/off (turn off SHOWALL)
+#   //DONE Toggle individual annotations on/off (turn off SHOWALL)
 #   Create icons for buttons
 #   Create shortcuts
 
@@ -1354,13 +1354,13 @@ class MainWindow(QtWidgets.QMainWindow):
                     self.viewLocation3d(self.qpointToPointcloud(shape.points[0]))
             if text == 'pole':
                 transformed = self.qpointToPointcloud(shape.points[0])
-                snapped = self.pointcloud.snap_to_center(transformed, 0.5)
+                snapped = self.pointcloud.snap_to_center(transformed, self._config['snap_center_thresh'])
                 shape.points[0] = self.pointcloudToQpoint(snapped)
             # If this is a new wall, snap the points to the corners of the walls
             elif text in ['wall', 'walls']:
                 for i, p in enumerate(shape.points):
                     transformed = self.qpointToPointcloud(p)
-                    snapped = self.pointcloud.snap_to_corner(transformed, 0.5)
+                    snapped = self.pointcloud.snap_to_corner(transformed, self._config['snap_center_thresh'])
                     shape.points[i] = self.pointcloudToQpoint(snapped)
             # If this is a new rack, split the rack into two racks if necessary and tighten box(es) to rack
             elif 'rack' in text:
