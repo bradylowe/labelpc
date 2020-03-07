@@ -1465,13 +1465,13 @@ class MainWindow(QtWidgets.QMainWindow):
         if item is None:
             return
         shape = self.labelList.get_shape_from_item(item)
-        #item.setCheckState(Qt.Checked if item.checkState() == Qt.Unchecked else Qt.Unchecked)
         if (self.canvas.getVisible(shape)):
             self.canvas.setShapeInvisible(shape)
-            
+            #item.setCheckState(Qt.Unchecked)
         else:
             self.canvas.setShapeVisible(shape)
-            
+            #item.setCheckState(Qt.Checked)
+        #item.setCheckState(Qt.Checked if item.checkState() == Qt.Unchecked else Qt.Unchecked)
 
     def loadFile(self, filename):
         # changing fileListWidget loads file
