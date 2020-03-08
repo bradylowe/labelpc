@@ -1222,12 +1222,8 @@ class MainWindow(QtWidgets.QMainWindow):
                 transformed.append(self.qpointToPointcloud(p))
             lookat = np.average(transformed, axis=0)
             self.viewLocation3d(lookat)
-            if len(transformed) == 1:
-                show = self.pointcloud.get_points_within(0.1, transformed[0], return_mask=True)
-                self.pointcloud.render(self.pointcloud.select(show, highlighted=False))
-            elif len(transformed) == 2:
-                show = self.pointcloud.in_box_2d(transformed)
-                self.pointcloud.render(self.pointcloud.select(show, highlighted=False))
+            show = self.pointsInShape(shape)
+            self.pointcloud.render(self.pointcloud.select(show, highlighted=False))
 
     def viewLocation3d(self, location):
         if not self.pointcloud.viewer_is_ready():
@@ -1417,6 +1413,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.canvas.setEnabled(False)
         self.resetState()
+        self.sourcePath = osp.dirname(filename)
         dialog = OpenFileDialog()
         if dialog.exec():
             self.max_points, self.scale, self.thickness = dialog.getInputs()
@@ -1588,6 +1585,19 @@ class MainWindow(QtWidgets.QMainWindow):
         self.settings.setValue('recentFiles', self.recentFiles)
         # ask the use for where to save the labels
         # self.settings.setValue('window/geometry', self.saveGeometry())
+
+    def pointsInShape(self, shape):
+        if shape.label == 'beam' or shape.label == 'pole':
+            keep = self.pointcloud.get_points_within(0.1, self.qpointToPointcloud(shape.points[0]), return_mask=True)
+        elif shape.label == 'rectangle':
+            box = [self.qpointToPointcloud(shape.points[0]), self.qpointToPointcloud(shape.points[1])]
+            keep = self.pointcloud.in_box_2d(box)
+        else:
+            path = shape.makePath()
+            keep = np.array(len(self.pointcloud), dtype=bool)
+            for i, p in enumerate(self.pointcloud.points):
+                keep[i] = path.contains(self.pointcloudToQpoint(p))
+        return keep
 
     def nearestCrosshairIntersection(self, point, threshold=0.3):
         beams = []
