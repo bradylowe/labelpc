@@ -227,7 +227,7 @@ class VoxelGrid:
         if scores is None:
             for v in self.occupied():
                 i, j, _ = np.array(v) - min_idx
-                #bitmap[i][range_idx[1] - j - 1][k] = self.counts(v)
+                #bitmap[i][range_idx[1] - j - 1] = self.counts(v)
                 bitmap[i][range_idx[1] - j - 1] = max
         else:
             for v in self.occupied():

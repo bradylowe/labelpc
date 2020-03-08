@@ -566,10 +566,13 @@ class Canvas(QtWidgets.QWidget):
 
     def finalise(self):
         assert self.current
-        '''
         if self.current.shape_type == 'rectangle':
-            self.current = Shape.rectangleToPolygon(self.current)
-        '''
+            min_p, max_p = QtCore.QPointF(), QtCore.QPointF()
+            min_p.setX(min(self.current.points[0].x(), self.current.points[1].x()))
+            min_p.setY(min(self.current.points[0].y(), self.current.points[1].y()))
+            max_p.setX(max(self.current.points[0].x(), self.current.points[1].x()))
+            max_p.setY(max(self.current.points[0].y(), self.current.points[1].y()))
+            self.current.points[0], self.current.points[1] = min_p, max_p
         self.current.close()
         self.shapes.append(self.current)
         self.storeShapes()
