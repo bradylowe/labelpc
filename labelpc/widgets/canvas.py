@@ -96,7 +96,7 @@ class Canvas(QtWidgets.QWidget):
 
     @createMode.setter
     def createMode(self, value):
-        if value not in ['polygon', 'rectangle', 'circle', 'line', 'point', 'linestrip']:
+        if value not in ['polygon', 'rectangle', 'circle', 'line', 'point', 'linestrip', 'beam']:
             raise ValueError('Unsupported createMode: %s' % value)
         self._createMode = value
 
@@ -200,6 +200,9 @@ class Canvas(QtWidgets.QWidget):
                 self.line.shape_type = "circle"
             elif self.createMode == 'line':
                 self.line.points = [self.current[0], pos]
+                self.line.close()
+            elif self.createMode == 'point':
+                self.line.points = [self.current[0]]
                 self.line.close()
             elif self.createMode == 'point':
                 self.line.points = [self.current[0]]
@@ -327,7 +330,7 @@ class Canvas(QtWidgets.QWidget):
                     # Create new shape.
                     self.current = Shape(shape_type=self.createMode)
                     self.current.addPoint(pos)
-                    if self.createMode == 'point':
+                    if self.createMode in ['point', 'beam']:
                         self.finalise()
                     else:
                         if self.createMode == 'circle':
@@ -710,7 +713,7 @@ class Canvas(QtWidgets.QWidget):
             self.line.points = [self.current[-1], self.current[0]]
         elif self.createMode in ['rectangle', 'line', 'circle']:
             self.current.points = self.current.points[0:1]
-        elif self.createMode == 'point':
+        elif self.createMode in ['point', 'beam']:
             self.current = None
         self.drawingPolygon.emit(True)
 
@@ -742,9 +745,16 @@ class Canvas(QtWidgets.QWidget):
         self.hEdge = None
         self.repaint()
 
-    def setShapeVisible(self, shape, value):
-        self.visible[shape] = value
+    def setShapeVisible(self, shape):
+        self.visible[shape] = True
         self.repaint()
+
+    def setShapeInvisible(self, shape):
+        self.visible[shape] = False
+        self.repaint()
+
+    def getVisible(self, shape):
+        return self.visible[shape]
 
     def overrideCursor(self, cursor):
         self.restoreCursor()

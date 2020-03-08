@@ -51,12 +51,11 @@ from labelpc.pointcloud.Voxelize import VoxelGrid
 #   Detect intersections (rack-rack, rack-wall, rack-noise)
 #   Detect rack orientation in annotation
 #   --- Austin:
-#   Add distance threshold for snap functions to config file (snapToCenter, snapToCorner, rackSep, rackSplit)
+#   //DONE Add distance threshold for snap functions to config file (snapToCenter, snapToCorner, rackSep, rackSplit)
 #   Draw crosshairs on beams that span the canvas (toggle on/off)
 #   Interpolate beam positions inside wall bounds or canvas bounds
-#   Implement "highlightSlice" in GUI 2 just like in GUI 1
 #   Color one side of rectangle a different color based on group ID
-#   Toggle individual annotations on/off (turn off SHOWALL)
+#   //DONE Toggle individual annotations on/off (turn off SHOWALL)
 #   Create icons for buttons
 #   Create shortcuts
 
@@ -121,7 +120,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.labelList = LabelQListWidget()
         self.labelList.itemActivated.connect(self.labelSelectionChanged)
         self.labelList.itemSelectionChanged.connect(self.labelSelectionChanged)
-        self.labelList.itemDoubleClicked.connect(self.editLabel)
+        self.labelList.itemDoubleClicked.connect(self.toggleIndivPolygon)
         # Connect to itemChanged to detect checkbox changes.
         self.labelList.itemChanged.connect(self.labelItemChanged)
         self.labelList.setDragDropMode(
@@ -133,6 +132,7 @@ class MainWindow(QtWidgets.QMainWindow):
         )
         self.shape_dock.setObjectName('Labels')
         self.shape_dock.setWidget(self.labelList)
+        #self.shape_dock.itemChanged.connect(self.toggleIndivPolygon)
 
         self.uniqLabelList = UniqueLabelQListWidget()
         self.uniqLabelList.itemActivated.connect(self.modeSelectionChanged)
@@ -206,7 +206,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 features = features | QtWidgets.QDockWidget.DockWidgetMovable
             getattr(self, dock).setFeatures(features)
             if self._config[dock]['show'] is False:
-                getattr(self, dock).setVisible(False)
+                getattr(self, dock).setInvisible(False)
 
         self.addDockWidget(Qt.RightDockWidgetArea, self.flag_dock)
         self.addDockWidget(Qt.RightDockWidgetArea, self.label_dock)
@@ -241,6 +241,16 @@ class MainWindow(QtWidgets.QMainWindow):
             self.tr(u'Show previous slice of point cloud'),
             enabled=False,
         )
+        highlight_slice = action(self.tr('Highlight Slice'), self.highlightSlice, shortcuts['highlight_slice'],
+                                 'highlight', self.tr('Highlight the currently showing slice of the point cloud'),
+
+                                 enabled=False)
+
+        check_highlight_slice = action(self.tr('Highlight Slice'), self.checkHighlightSlice, shortcuts['highlight_slice'],
+                                 'eye', self.tr('Highlight the currently showing slice of the point cloud'),
+                                 checkable=True,
+                                 enabled=False)
+
         save = action(self.tr('&Save'),
                       self.saveFile, shortcuts['save'], 'save',
                       self.tr('Save labels to file'), enabled=False)
@@ -353,6 +363,14 @@ class MainWindow(QtWidgets.QMainWindow):
             self.tr('Start drawing points'),
             enabled=False,
         )
+        createBeamMode = action(
+            self.tr('Create Beam'),
+            lambda: self.toggleDrawMode(False, createMode='beam'),
+            shortcuts['create_point'],
+            'objects',
+            self.tr('Start drawing points'),
+            enabled=False,
+        )
         createLineStripMode = action(
             self.tr('Create LineStrip'),
             lambda: self.toggleDrawMode(False, createMode='linestrip'),
@@ -369,6 +387,7 @@ class MainWindow(QtWidgets.QMainWindow):
         delete = action(self.tr('Delete Polygons'), self.deleteSelectedShape,
                         shortcuts['delete_polygon'], 'cancel',
                         self.tr('Delete the selected polygons'), enabled=False)
+
         copy = action(self.tr('Duplicate Polygons'), self.copySelectedShape,
                       shortcuts['duplicate_polygon'], 'copy',
                       self.tr('Create a duplicate of the selected polygons'),
@@ -498,11 +517,14 @@ class MainWindow(QtWidgets.QMainWindow):
             createCircleMode=createCircleMode,
             createLineMode=createLineMode,
             createPointMode=createPointMode,
+            createBeamMode=createBeamMode,
             createLineStripMode=createLineStripMode,
             zoom=zoom, zoomIn=zoomIn, zoomOut=zoomOut, zoomOrg=zoomOrg,
             fitWindow=fitWindow, fitWidth=fitWidth,
             zoomActions=zoomActions,
             showNextSlice=showNextSlice, showLastSlice=showLastSlice,
+            highlightSlice=highlight_slice,
+            checkHighlightSlice=check_highlight_slice,
             render3d=render_3d,
             highlightWalls=highlight_walls,
             viewAnnotation3d=view_annotation_3d,
@@ -558,6 +580,10 @@ class MainWindow(QtWidgets.QMainWindow):
                 editMode,
             ),
             onShapesPresent=(saveAs, hideAll, showAll, rotate_rack, merge_racks, break_all_racks, update_annotation),
+            on3dViewerActive=(
+                highlight_slice,
+                check_highlight_slice,
+            ),
         )
 
         self.canvas.edgeSelected.connect(self.canvasShapeEdgeSelected)
@@ -604,6 +630,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 hideAll,
                 showAll,
                 render_3d,
+                check_highlight_slice,
                 view_annotation_3d,
                 None,
                 zoomIn,
@@ -792,6 +819,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.actions.createLineMode.setEnabled(True)
         self.actions.createPointMode.setEnabled(True)
         self.actions.createLineStripMode.setEnabled(True)
+        self.actions.createBeamMode.setEnabled(True)
         title = __appname__
         if self.filename is not None:
             title = '{} - {}'.format(title, self.filename)
@@ -802,12 +830,16 @@ class MainWindow(QtWidgets.QMainWindow):
         else:
             self.actions.deleteFile.setEnabled(False)
 
-    def toggleActions(self, value=True):
+    def toggleActions(self, viewer=None, value=True):
         """Enable/Disable widgets which depend on an opened image."""
         for z in self.actions.zoomActions:
             z.setEnabled(value)
         for action in self.actions.onLoadActive:
             action.setEnabled(value)
+        if viewer is not None:
+            for action in self.actions.on3dViewerActive:
+                action.setEnabled(viewer)
+
 
     def canvasShapeEdgeSelected(self, selected, shape):
         self.actions.addPointToEdge.setEnabled(
@@ -839,6 +871,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.pointcloud.close_viewer()
         self.pointcloud = PointCloud(render=False)
         self.canvas.resetState()
+        self.highlightSliceOnScroll = False
 
     def currentItem(self):
         items = self.labelList.selectedItems()
@@ -888,6 +921,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.actions.createLineMode.setEnabled(createMode != 'line')
         self.actions.createPointMode.setEnabled(createMode != 'point')
         self.actions.createLineStripMode.setEnabled(createMode != 'linestrip')
+        self.actions.createBeamMode.setEnabled(createMode != 'beam')
         self.actions.editMode.setEnabled(not edit)
 
     def setEditMode(self):
@@ -977,8 +1011,10 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self._config['display_label_popup'] = False
         self.annotationMode = label
-        if label in ['beam', 'pole']:
+        if label == 'pole':
             self.toggleDrawMode(False, createMode='point')
+        if label == 'beam':
+            self.toggleDrawMode(False, createMode='beam')
         elif 'rack' in label:
             self.toggleDrawMode(False, createMode='rectangle')
         elif label == 'door':
@@ -1206,7 +1242,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def labelItemChanged(self, item):
         shape = self.labelList.get_shape_from_item(item)
-        self.canvas.setShapeVisible(shape, item.checkState() == Qt.Checked)
+        self.canvas.setShapeVisible(shape)
 
     # Callback functions:
 
@@ -1277,13 +1313,13 @@ class MainWindow(QtWidgets.QMainWindow):
                         self.breakRack(rack, pos, orient)
             elif text == 'pole':
                 transformed = self.qpointToPointcloud(shape.points[0])
-                snapped = self.pointcloud.snap_to_center(transformed, 0.5)
+                snapped = self.pointcloud.snap_to_center(transformed, self._config['snap_center_thresh'])
                 shape.points[0] = self.pointcloudToQpoint(snapped)
             # If this is a new wall, snap the points to the corners of the walls
             elif text in ['wall', 'walls']:
                 for i, p in enumerate(shape.points):
                     transformed = self.qpointToPointcloud(p)
-                    snapped = self.pointcloud.snap_to_corner(transformed, 0.5)
+                    snapped = self.pointcloud.snap_to_corner(transformed, self._config['snap_center_thresh'])
                     shape.points[i] = self.pointcloudToQpoint(snapped)
             # If this is a new rack, split the rack into two racks if necessary and tighten box(es) to rack
             elif 'rack' in text:
@@ -1383,6 +1419,16 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.scrollBars[Qt.Vertical].value() + y_shift,
             )
 
+    def highlightSlice(self):
+        if not self.pointcloud.viewer_is_ready():
+            self.toggleActions(viewer=False)
+            return
+        self.pointcloud.highlight(self.pointcloud.select(indices=self.sliceIndices[self.sliceIdx],
+                                                         showing=True, highlighted=False))
+
+    def checkHighlightSlice(self):
+        self.highlightSliceOnScroll = True
+
     def setFitWindow(self, value=True):
         if value:
             self.actions.fitWidth.setChecked(False)
@@ -1398,6 +1444,18 @@ class MainWindow(QtWidgets.QMainWindow):
     def togglePolygons(self, value):
         for item, shape in self.labelList.itemsToShapes:
             item.setCheckState(Qt.Checked if value else Qt.Unchecked)
+
+    def toggleIndivPolygon(self, item=None):
+        if item is None:
+            return
+        shape = self.labelList.get_shape_from_item(item)
+        if (self.canvas.getVisible(shape)):
+            self.canvas.setShapeInvisible(shape)
+            #item.setCheckState(Qt.Unchecked)
+        else:
+            self.canvas.setShapeVisible(shape)
+            #item.setCheckState(Qt.Checked)
+        #item.setCheckState(Qt.Checked if item.checkState() == Qt.Unchecked else Qt.Unchecked)
 
     def loadFile(self, filename):
         # changing fileListWidget loads file
@@ -1481,6 +1539,14 @@ class MainWindow(QtWidgets.QMainWindow):
             buff.seek(0)
             self.imageData.append(buff.read())
 
+    def update3dViewer(self, values=None):
+        if self.pointcloud.viewer_is_ready():
+            self.pointcloud.render(showing=True)
+            if values is not None:
+                self.pointcloud.viewer.attributes(values)
+        else:
+            self.toggleActions(viewer=False)
+
     def updatePixmap(self):
         if not self.imageData:
             return
@@ -1491,6 +1557,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.image = QtGui.QImage.fromData(self.imageData[self.sliceIdx])
         self.canvas.loadPixmap(QtGui.QPixmap.fromImage(self.image))
         self.canvas.loadShapes(self.labelList.shapes)
+        if self.highlightSliceOnScroll:
+            self.highlightSlice()
 
     def loadLabelsFile(self, filename):
         self.status(self.tr("Loading %s...") % osp.basename(str(filename)))

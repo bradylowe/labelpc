@@ -8,6 +8,7 @@ logger_level: info
 select_rack: 1.1
 drive_in_rack: 2.4
 extra_deep_rack: 7.2
+snap_center_thresh: 0.5
 
 flags: null
 label_flags: null
@@ -86,6 +87,8 @@ shortcuts:
   create_wall: null
   create_walls: null
   create_linestrip: null
+  highlight_slice: null
+  display_polygon: null
   edit_polygon: Ctrl+J
   delete_polygon: Delete
   duplicate_polygon: Ctrl+D
