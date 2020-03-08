@@ -11,6 +11,16 @@ class LabelQListWidget(EscapableQListWidget):
         self.itemsToShapes = []
         self.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
 
+    def get_index_from_shape(self, shape):
+        for index, (item, shape_) in enumerate(self.itemsToShapes):
+            if shape_ is shape:
+                return index
+
+    def get_index_from_item(self, item):
+        for index, (item_, shape) in enumerate(self.itemsToShapes):
+            if item_ is item:
+                return index
+
     def get_shape_from_item(self, item):
         for index, (item_, shape) in enumerate(self.itemsToShapes):
             if item_ is item:
