@@ -195,7 +195,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.canvas.shapeMoved.connect(self.setDirty)
         self.canvas.selectionChanged.connect(self.shapeSelectionChanged)
         self.canvas.drawingPolygon.connect(self.toggleDrawingSensitive)
-        self.canvas.splitRack.connect(self.splitRack)
+        self.canvas.breakRack.connect(self.breakRack)
 
         self.setCentralWidget(scrollArea)
 
@@ -301,11 +301,14 @@ class MainWindow(QtWidgets.QMainWindow):
         update_annotation = action('Update Label', self.updateSelectedLabelWithHighlightedPoints, None, 'update label',
                                    'Update the label based on the points currently highlighted in the 3d viewer')
 
-        split_all_racks = action('Split All Racks', self.splitRacks, None, 'split racks near beams',
-                                 'Split the racks that are broken up due to proximity to support beams')
+        break_all_racks = action('Break All Racks', self.breakRack, None, 'break racks near beams',
+                                 'Break the racks that are broken up due to proximity to support beams')
 
-        merge_racks = action('Merge Racks', self.unsplitRacks, None, 'merge selected racks',
-                             'Merge the selected racks into a single rack (undo rack split)')
+        merge_racks = action('Merge Racks', self.unbreakRack, None, 'merge selected racks',
+                             'Merge the selected racks into a single rack (undo rack break)')
+
+        rotate_rack = action('Rotate Rack', self.rotateRack, None, 'rotate selected rack',
+                             'Change the orientation of the selected rack')
 
         toggle_keep_prev_mode = action(
             self.tr('Keep Previous Annotation'),
@@ -510,8 +513,9 @@ class MainWindow(QtWidgets.QMainWindow):
             highlightWalls=highlight_walls,
             viewAnnotation3d=view_annotation_3d,
             updateAnnotation=update_annotation,
-            splitAllRacks=split_all_racks,
+            breakAllRacks=break_all_racks,
             mergeRacks=merge_racks,
+            rotateRack=rotate_rack,
             #fileMenuActions=(open_, opendir, save, saveAs, close, quit),
             fileMenuActions=(open_, save, saveAs, close, quit),
             tool=(),
@@ -658,7 +662,7 @@ class MainWindow(QtWidgets.QMainWindow):
             render_3d,
             highlight_walls,
             update_annotation,
-            split_all_racks,
+            break_all_racks,
             merge_racks,
         )
 
@@ -1325,11 +1329,11 @@ class MainWindow(QtWidgets.QMainWindow):
                     snapped = self.pointcloud.snap_to_center(transformed, 0.5)
                     shape.points[0] = self.pointcloudToQpoint(snapped)
                 # Check for racks that this beam breaks and break them
-
-                # Look at the new beam in the 3d viewer
-                if self.pointcloud.viewer_is_ready():
-                    self.viewLocation3d(self.qpointToPointcloud(shape.points[0]))
-            if text == 'pole':
+                for rack in self.racks:
+                    breaks, pos, orient = self.beamBreaksRack(shape, rack)
+                    if breaks:
+                        self.breakRack(rack, pos, orient)
+            elif text == 'pole':
                 transformed = self.qpointToPointcloud(shape.points[0])
                 snapped = self.pointcloud.snap_to_center(transformed, 0.5)
                 shape.points[0] = self.pointcloudToQpoint(snapped)
@@ -1341,33 +1345,59 @@ class MainWindow(QtWidgets.QMainWindow):
                     shape.points[i] = self.pointcloudToQpoint(snapped)
             # If this is a new rack, split the rack into two racks if necessary and tighten box(es) to rack
             elif 'rack' in text:
-                box = np.array([self.qpointToPointcloud(shape.points[0]), self.qpointToPointcloud(shape.points[1])])
-                inbox = self.pointcloud.in_box_2d(box)
-                if not np.sum(inbox):
-                    print('No points contained in this rack')
-                    return
-                box = self.pointcloud.tighten_to_rack(box)
-                inbox = self.pointcloud.in_box_2d(box)
-                if self.isTwoRacks(text, box):
-                    box, box2 = self.splitTwoRacks(text, box)
-                    box, box2 = self.pointcloud.tighten_to_rack(box), self.pointcloud.tighten_to_rack(box2)
-                    inbox, inbox2 = self.pointcloud.in_box_2d(box), self.pointcloud.in_box_2d(box2)
-                    inbox[inbox2] = True
-                    shape2 = shape.copy()
-                    shape2.points[0], shape2.points[1] = self.pointcloudToQpoint(box2[0]), self.pointcloudToQpoint(box2[1])
-                    self.addLabel(shape2)
-                shape.points[0], shape.points[1] = self.pointcloudToQpoint(box[0]), self.pointcloudToQpoint(box[1])
-                if self.pointcloud.viewer_is_ready():
-                    self.pointcloud.highlight(self.pointcloud.select(inbox, highlighted=False))
+                print(shape.points)
+                self.tightenRack(shape)
+                shape.group_id = self.rackOrientation(shape)
+                if self.isTwoRacks(shape):
+                    self.breakBackToBackRacks(shape)
             self.addLabel(shape)
             self.updatePixmap()
             self.actions.editMode.setEnabled(True)
             self.actions.undoLastPoint.setEnabled(False)
             self.actions.undo.setEnabled(True)
             self.setDirty()
+            if self.pointcloud.viewer_is_ready():
+                highlight = self.pointsInShape(shape)
+                self.pointcloud.highlight(self.pointcloud.select(highlight, highlighted=False))
+                self.viewLocation3d(self.qpointToPointcloud(shape.points[0]))
         else:
             self.canvas.undoLastLine()
             self.canvas.shapesBackups.pop()
+
+    def beamBreaksRack(self, beam, rack):
+        dist_thresh = 2.0
+        if not rack.group_id % 2 and rack.points[0].x() < beam.points[0].x() < rack.points[1].x():
+            min_dist = min(abs(rack.points[0].y() - beam.points[0].y()), abs(rack.points[1].y() - beam.points[0].y()))
+            if min_dist < dist_thresh / self.scale:
+                return True, beam.points[0].x(), 0
+        elif rack.group_id % 2 and rack.points[0].y() < beam.points[0].y() < rack.points[1].y():
+            min_dist = min(abs(rack.points[0].x() - beam.points[0].x()), abs(rack.points[1].x() - beam.points[0].x()))
+            if min_dist < dist_thresh / self.scale:
+                return True, beam.points[0].y(), 1
+        return False, None, None
+
+    @staticmethod
+    def rackOrientation(rack):
+        # Todo: check orientation more in detail to return number [0 1 2 3]
+        if abs(rack.points[0].x() - rack.points[1].x()) > abs(rack.points[0].y() - rack.points[1].y()):
+            return 0
+        else:
+            return 1
+
+    def isOutsideWall(self, shape):
+        outside = np.zeros(len(shape.points), dtype=bool)
+        walls = self.walls
+        for i, point in enumerate(shape.points):
+            if not walls.containsPoint(point):
+                outside[i] = True
+        return outside
+
+    def racksIntersect(self, rack, other):
+        xA = max(rack.points[0].x(), other.points[0].x())
+        yA = max(rack.points[0].y(), other.points[0].y())
+        xB = min(rack.points[1].x(), other.points[1].x())
+        yB = min(rack.points[1].y(), other.points[1].y())
+        return max(0, xB - xA + 1) * max(0, yB - yA + 1)
 
     def scrollRequest(self, delta, orientation):
         units = - delta * 0.1  # natural scroll
@@ -1630,7 +1660,11 @@ class MainWindow(QtWidgets.QMainWindow):
         # Todo: interpolate beam positions based off of current beam positions and wall bounds
         pass
 
-    def unsplitRacks(self):
+    def bringRackInsideWalls(self, rack, outside):
+        # Todo: implement this function
+        walls = self.walls
+
+    def unbreakRack(self):
         racks = []
         for item in self.labelList.selectedItems():
             shape = self.labelList.get_shape_from_item(item)
@@ -1648,105 +1682,87 @@ class MainWindow(QtWidgets.QMainWindow):
         racks[0].points[1] = self.pointcloudToQpoint(np.max(points, axis=0))
         self.updatePixmap()
 
-    def splitRack(self, rack=None, pos=None):
-        if pos is None:
-            pos = self.canvas.prevPoint
+    def breakRack(self, rack=None, pos=None, orientation=None, tighten=False):
         if rack is None:
             for item, shape in self.labelList.itemsToShapes:
-                if 'rack' in shape.label and shape.containsPoint(pos):
+                if 'rack' in shape.label and shape.containsPoint(self.canvas.prevPoint):
                     rack = shape
+                    if rack.group_id % 2:
+                        pos = self.canvas.prevPoint.y()
+                    else:
+                        pos = self.canvas.prevPoint.x()
                     break
         if rack is None:
             return
-        newRack = rack.copy()
-        dims = np.array(self.qpointToPointcloud(rack.points[0])) - np.array(self.qpointToPointcloud(rack.points[1]))
-        orientation = rack.group_id
+        new_rack = rack.copy()
         if orientation is None:
-            if np.abs(dims[0]) > np.abs(dims[1]):
-                orientation = 0
-            else:
-                orientation = 1
+            orientation = rack.group_id
         if orientation % 2 == 0:
-            rack.points[1].setX(pos.x() - 0.2)
-            newRack.points[0].setX(pos.x() + 0.2)
+            rack.points[1].setX(pos - 0.2)
+            new_rack.points[0].setX(pos + 0.2)
         else:
-            rack.points[1].setY(pos.y() - 0.2)
-            newRack.points[0].setY(pos.y() + 0.2)
-        self.addLabel(newRack)
+            rack.points[1].setY(pos - 0.2)
+            new_rack.points[0].setY(pos + 0.2)
+        if tighten:
+            self.tightenRack(rack)
+            self.tightenRack(new_rack)
+        if not self.isRackBigEnough(rack):
+            self.remLabels([rack])
+            if self.noShapes():
+                for action in self.actions.onShapesPresent:
+                    action.setEnabled(False)
+        if self.isRackBigEnough(new_rack):
+            self.addLabel(new_rack)
         self.updatePixmap()
         self.setDirty()
+        return new_rack
 
-    def splitRacks(self, selected=False):
-        racks = []
-        if selected:
-            for item in self.labelList.selectedItems():
-                shape = self.labelList.get_shape_from_item(item)
-                if 'rack' in shape.label:
-                    racks.append(shape)
-        else:
-            for _, shape in self.labelList.itemsToShapes:
-                if 'rack' in shape.label:
-                    racks.append(shape)
-        for rack in racks:
-            x_dim, y_dim = abs(rack.points[0].x() - rack.points[1].x()), abs(rack.points[0].y() - rack.points[1].y())
-            x_c, y_c = (rack.points[0].x() + rack.points[1].x()) / 2.0, (rack.points[0].y() + rack.points[1].y()) / 2.0
-            for _, shape in self.labelList.itemsToShapes:
-                if shape.label == 'beam':
-                    if rack.points[0].x() < shape.points[0].x() < rack.points[1].x():
-                        if abs(y_c - shape.points[0].y()) < y_dim / 2.0 + 2.0:
-                            pos = shape.points[0]
-                            pos.setY(y_c)
-                            self.splitRack(rack, pos)
-                    elif rack.points[0].y() < shape.points[0].y() < rack.points[1].y():
-                        if abs(x_c - shape.points[0].x()) < x_dim / 2.0 + 2.0:
-                            pos = shape.points[0]
-                            pos.setX(x_c)
-                            self.splitRack(rack, pos)
-
-    def isTwoRacks(self, type, bounds):
+    def isRackBigEnough(self, rack):
+        bounds = np.array([self.qpointToPointcloud(rack.points[0]), self.qpointToPointcloud(rack.points[1])])
         dims = np.abs(bounds[1] - bounds[0])
-        return (dims / 1.9 > self._config[type]).all()
+        return not (dims < self._config[rack.label]).any()
 
-    def splitTwoRacks(self, type, bounds):
-        dims = np.abs(bounds[1] - bounds[0])
-        bounds2 = bounds.copy()
-        if abs(dims[0] - self._config[type] * 2.0) < abs(dims[1] - self._config[type] * 2.0):
-            bounds[1][0] = (bounds[0][0] + bounds[1][0]) / 2.0 - 0.05
-            bounds2[0][0] = (bounds2[0][0] + bounds2[1][0]) / 2.0 + 0.05
+    def tightenRack(self, rack):
+        box = np.array([self.qpointToPointcloud(rack.points[0]), self.qpointToPointcloud(rack.points[1])])
+        inbox = self.pointcloud.in_box_2d(box)
+        if not np.sum(inbox):
+            print('No points contained in this rack')
+            return
+        points = self.pointcloud.points.loc[inbox][['x', 'y', 'z']].values
+        filtered = points[:, 2] > 3.0
+        filtered[points[:, 2] > 7.0] = False
+        if np.sum(filtered) > 1000:
+            points = points[filtered]
+        vg = VoxelGrid(points, (0.02, 0.02, 10000.0))
+        scores = np.zeros(len(points))
+        for v in vg.occupied():
+            scores[vg.indices(v)] = vg.counts(v)
+        filtered = scores > np.percentile(scores, 50)
+        if np.sum(filtered):
+            points = points[filtered]
+            box = np.array((points.min(axis=0)[:2], points.max(axis=0)[:2]))
+            rack.points[0], rack.points[1] = self.pointcloudToQpoint(box[0]), self.pointcloudToQpoint(box[1])
         else:
-            bounds[1][1] = (bounds[0][1] + bounds[1][1]) / 2.0 - 0.05
-            bounds2[0][1] = (bounds2[0][1] + bounds2[1][1]) / 2.0 + 0.05
-        return bounds, bounds2
+            self.remLabels([rack])
+            if self.noShapes():
+                for action in self.actions.onShapesPresent:
+                    action.setEnabled(False)
+        self.setDirty()
 
-    def alignRoom(self):
-        if not self.dirty:
-            return True
-        mb = QtWidgets.QMessageBox
-        msg = self.tr('This action requires that the annotations be saved and the point cloud reloaded.'
-                      'Are you sure you want to apply the changes?')
-        answer = mb.question(self,
-                             self.tr('Continue?'),
-                             msg,
-                             mb.Apply | mb.Cancel,
-                             mb.Apply)
-        if answer != mb.Apply:
-            return
+    def isTwoRacks(self, rack):
+        bounds = np.array([self.qpointToPointcloud(rack.points[0]), self.qpointToPointcloud(rack.points[1])])
+        dims = np.abs(bounds[1] - bounds[0])
+        return (dims / 1.9 > self._config[rack.label]).all()
 
-        angle = None
-        from labelpc.pointcloud.Proprietary import align_room_by_walls_polygon
-        for s in self.labelList.shapes:
-            if s.label[:4] == 'walls' and s.shape_type == 'polygon':
-                points = [(p.x(), p.y()) for p in s.points]
-                angle = -align_room_by_walls_polygon(points)
-                break
-        if angle is None:
-            return
-
-        self.pointcloud.points[['x', 'y', 'z']] = self.pointcloud.rotate(degrees=angle)
-        self.pointcloud.write(self.pointcloud.filename, overwrite=True)
-        self.rotateShapes(angle)
-        self.saveFile()
-        self.loadFile(self.filename)
+    def breakBackToBackRacks(self, rack):
+        bounds = np.array([self.qpointToPointcloud(rack.points[0]), self.qpointToPointcloud(rack.points[1])])
+        dims = np.abs(bounds[1] - bounds[0])
+        if abs(dims[0] - self._config[rack.label] * 2.0) < abs(dims[1] - self._config[rack.label] * 2.0):
+            middle = (rack.points[0].x() + rack.points[1].x()) / 2.0
+            self.breakRack(rack, middle, 0, tighten=True)
+        else:
+            middle = (rack.points[0].y() + rack.points[1].y()) / 2.0
+            self.breakRack(rack, middle, 1, tighten=True)
 
     def rotateShapes(self, angle):
         theta = np.radians(angle)
@@ -1757,6 +1773,21 @@ class MainWindow(QtWidgets.QMainWindow):
                 trans = self.qpointToPointcloud(point)
                 trans = np.dot(trans, rot)
                 self.canvas.shapes[s].points[p] = self.pointcloudToQpoint(trans)
+
+    def rotateRack(self):
+        items = self.labelList.selectedItems()
+        if items:
+            rack = None
+            for item in items:
+                shape = self.labelList.get_shape_from_item(item)
+                if 'rack' in shape.label:
+                    rack = shape
+                    break
+            if rack is not None:
+                rack.group_id += 1
+                if rack.group_id >= 4:
+                    rack.group_id = 0
+                print('rotated rack')
 
     def render3d(self):
         if not self.pointcloud.viewer_is_ready():
@@ -2074,6 +2105,36 @@ class MainWindow(QtWidgets.QMainWindow):
             item = self.fileListWidget.item(i)
             lst.append(item.text())
         return lst
+
+    @property
+    def racks(self):
+        racks = []
+        for _, shape in self.labelList.itemsToShapes:
+            if 'rack' in shape.label:
+                racks.append(shape)
+        return racks
+
+    @property
+    def beams(self):
+        beams = []
+        for _, shape in self.labelList.itemsToShapes:
+            if shape.label == 'beam':
+                beams.append(shape)
+        return beams
+
+    @property
+    def walls(self):
+        for _, shape in self.labelList.itemsToShapes:
+            if shape.label == 'walls':
+                return shape
+
+    @property
+    def doors(self):
+        doors = []
+        for _, shape in self.labelList.itemsToShapes:
+            if 'door' in shape.label:
+                doors.append(shape)
+        return doors
 
     def importDirImages(self, dirpath, pattern=None, load=True):
         self.actions.openNextImg.setEnabled(True)

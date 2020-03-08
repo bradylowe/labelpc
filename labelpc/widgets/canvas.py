@@ -25,7 +25,7 @@ class Canvas(QtWidgets.QWidget):
     nextSliceRequest = QtCore.Signal()
     lastSliceRequest = QtCore.Signal()
     newShape = QtCore.Signal()
-    splitRack = QtCore.Signal()
+    breakRack = QtCore.Signal()
     selectionChanged = QtCore.Signal(list)
     shapeMoved = QtCore.Signal()
     drawingPolygon = QtCore.Signal(bool)
@@ -355,7 +355,7 @@ class Canvas(QtWidgets.QWidget):
         if ev.button() == QtCore.Qt.RightButton:
             if int(ev.modifiers()) == QtCore.Qt.ControlModifier:
                 self.prevPoint = pos
-                self.splitRack.emit()
+                self.breakRack.emit()
                 return
             menu = self.menus[len(self.selectedShapesCopy) > 0]
             self.restoreCursor()
