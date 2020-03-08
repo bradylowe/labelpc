@@ -49,9 +49,6 @@ from labelpc.pointcloud.Voxelize import VoxelGrid
 #   --- Brady:
 #   Create annotations for individual slices ???
 #   Detect intersections (rack-rack, rack-wall, rack-noise)
-#   Break rack (automatic) (turn one annotation into 2 and resize each independently)
-#   Merge racks (turn two annotations into 1)
-#   Rotate rack (change orientation {direction pallet goes into and out of rack})
 #   Detect rack orientation in annotation
 #   --- Austin:
 #   Add distance threshold for snap functions to config file (snapToCenter, snapToCorner, rackSep, rackSplit)
@@ -299,7 +296,7 @@ class MainWindow(QtWidgets.QMainWindow):
         update_annotation = action('Update Label', self.updateSelectedLabelWithHighlightedPoints, None, 'update label',
                                    'Update the label based on the points currently highlighted in the 3d viewer')
 
-        break_all_racks = action('Break All Racks', self.breakRack, None, 'break racks near beams',
+        break_all_racks = action('Break All Racks', self.breakAllRacks, None, 'break racks near beams',
                                  'Break the racks that are broken up due to proximity to support beams')
 
         merge_racks = action('Merge Racks', self.unbreakRack, None, 'merge selected racks',
@@ -1268,7 +1265,6 @@ class MainWindow(QtWidgets.QMainWindow):
                 # Snap beam to beam intersection or to nearest beam
                 intersection, intersected = self.nearestCrosshairIntersection(shape.points[0])
                 if intersected:
-                    print('Snapping to pole intersection')
                     shape.points[0] = self.pointcloudToQpoint(intersection)
                 else:
                     transformed = self.qpointToPointcloud(shape.points[0])
@@ -1291,7 +1287,6 @@ class MainWindow(QtWidgets.QMainWindow):
                     shape.points[i] = self.pointcloudToQpoint(snapped)
             # If this is a new rack, split the rack into two racks if necessary and tighten box(es) to rack
             elif 'rack' in text:
-                print(shape.points)
                 self.tightenRack(shape)
                 shape.group_id = self.rackOrientation(shape)
                 if self.isTwoRacks(shape):
@@ -1676,6 +1671,18 @@ class MainWindow(QtWidgets.QMainWindow):
         self.updatePixmap()
         self.setDirty()
         return new_rack
+
+    def breakAllRacks(self):
+        for beam in self.beams:
+            broke_rack = True
+            while broke_rack:
+                broke_rack = False
+                racks = self.racks
+                for rack in racks:
+                    broke_rack, pos, orient = self.beamBreaksRack(beam, rack)
+                    if broke_rack:
+                        self.breakRack(rack, pos, orient)
+                        break
 
     def isRackBigEnough(self, rack):
         bounds = np.array([self.qpointToPointcloud(rack.points[0]), self.qpointToPointcloud(rack.points[1])])
