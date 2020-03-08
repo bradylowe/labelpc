@@ -290,8 +290,6 @@ class MainWindow(QtWidgets.QMainWindow):
         close = action('&Close', self.closeFile, shortcuts['close'], 'close',
                        'Close current file')
 
-        align_room = action('Align Room', self.alignRoom, None, 'align', 'Align the room using walls')
-
         render_3d = action('Render points in 3D', self.render3d, None, 'render', 'Render the points in 3D')
 
         highlight_walls = action('Highlight walls', self.highlightWalls, None, 'highlight', 'Highlight walls')
@@ -508,7 +506,6 @@ class MainWindow(QtWidgets.QMainWindow):
             fitWindow=fitWindow, fitWidth=fitWidth,
             zoomActions=zoomActions,
             showNextSlice=showNextSlice, showLastSlice=showLastSlice,
-            alignRoom=align_room,
             render3d=render_3d,
             highlightWalls=highlight_walls,
             viewAnnotation3d=view_annotation_3d,
@@ -553,12 +550,8 @@ class MainWindow(QtWidgets.QMainWindow):
                 close,
                 showNextSlice,
                 showLastSlice,
-                align_room,
                 render_3d,
                 highlight_walls,
-                update_annotation,
-                split_all_racks,
-                merge_racks,
                 createMode,
                 createRectangleMode,
                 createCircleMode,
@@ -567,7 +560,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 createLineStripMode,
                 editMode,
             ),
-            onShapesPresent=(saveAs, hideAll, showAll),
+            onShapesPresent=(saveAs, hideAll, showAll, rotate_rack, merge_racks, break_all_racks, update_annotation),
         )
 
         self.canvas.edgeSelected.connect(self.canvasShapeEdgeSelected)
@@ -658,7 +651,6 @@ class MainWindow(QtWidgets.QMainWindow):
             zoomOut,
             fitWindow,
             fitWidth,
-            align_room,
             render_3d,
             highlight_walls,
             update_annotation,
@@ -889,58 +881,16 @@ class MainWindow(QtWidgets.QMainWindow):
     def toggleDrawMode(self, edit=True, createMode='polygon'):
         self.canvas.setEditing(edit)
         self.canvas.createMode = createMode
-        if edit:
-            self.actions.createMode.setEnabled(True)
-            self.actions.createRectangleMode.setEnabled(True)
-            self.actions.createCircleMode.setEnabled(True)
-            self.actions.createLineMode.setEnabled(True)
-            self.actions.createPointMode.setEnabled(True)
-            self.actions.createLineStripMode.setEnabled(True)
-        else:
-            if createMode == 'polygon':
-                self.actions.createMode.setEnabled(False)
-                self.actions.createRectangleMode.setEnabled(True)
-                self.actions.createCircleMode.setEnabled(True)
-                self.actions.createLineMode.setEnabled(True)
-                self.actions.createPointMode.setEnabled(True)
-                self.actions.createLineStripMode.setEnabled(True)
-            elif createMode == 'rectangle':
-                self.actions.createMode.setEnabled(True)
-                self.actions.createRectangleMode.setEnabled(False)
-                self.actions.createCircleMode.setEnabled(True)
-                self.actions.createLineMode.setEnabled(True)
-                self.actions.createPointMode.setEnabled(True)
-                self.actions.createLineStripMode.setEnabled(True)
-            elif createMode == 'line':
-                self.actions.createMode.setEnabled(True)
-                self.actions.createRectangleMode.setEnabled(True)
-                self.actions.createCircleMode.setEnabled(True)
-                self.actions.createLineMode.setEnabled(False)
-                self.actions.createPointMode.setEnabled(True)
-                self.actions.createLineStripMode.setEnabled(True)
-            elif createMode == 'point':
-                self.actions.createMode.setEnabled(True)
-                self.actions.createRectangleMode.setEnabled(True)
-                self.actions.createCircleMode.setEnabled(True)
-                self.actions.createLineMode.setEnabled(True)
-                self.actions.createPointMode.setEnabled(False)
-                self.actions.createLineStripMode.setEnabled(True)
-            elif createMode == "circle":
-                self.actions.createMode.setEnabled(True)
-                self.actions.createRectangleMode.setEnabled(True)
-                self.actions.createCircleMode.setEnabled(False)
-                self.actions.createLineMode.setEnabled(True)
-                self.actions.createPointMode.setEnabled(True)
-                self.actions.createLineStripMode.setEnabled(True)
-            elif createMode == "linestrip":
-                self.actions.createMode.setEnabled(True)
-                self.actions.createRectangleMode.setEnabled(True)
-                self.actions.createCircleMode.setEnabled(True)
-                self.actions.createLineMode.setEnabled(True)
-                self.actions.createPointMode.setEnabled(True)
-                self.actions.createLineStripMode.setEnabled(False)
-            else:
-                raise ValueError('Unsupported createMode: %s' % createMode)
+
+        if createMode not in ['polygon', 'rectangle', 'circle', 'line', 'point', 'linestrip']:
+            raise ValueError('Unsupported createMode: %s' % createMode)
+
+        self.actions.createMode.setEnabled(createMode != 'polygon')
+        self.actions.createRectangleMode.setEnabled(createMode != 'rectangle')
+        self.actions.createCircleMode.setEnabled(createMode != 'circle')
+        self.actions.createLineMode.setEnabled(createMode != 'line')
+        self.actions.createPointMode.setEnabled(createMode != 'point')
+        self.actions.createLineStripMode.setEnabled(createMode != 'linestrip')
         self.actions.editMode.setEnabled(not edit)
 
     def setEditMode(self):
@@ -1517,7 +1467,7 @@ class MainWindow(QtWidgets.QMainWindow):
         min_point, max_point = points.min(axis=0), points.max(axis=0)
         min_idx, max_idx = (min_point / self.scale).astype(int), (max_point / self.scale).astype(int)
         slices = VoxelGrid(points, (10000., 10000., self.thickness))
-        self.offset = QtCore.QPointF(min_idx[0], min_idx[1])
+        self.offset = QtCore.QPointF(min_point[0], min_point[1])
         self.sliceIndices = []
         for v in tqdm(slices.all(), desc='Building bitmaps from point cloud'):
             if not len(slices.indices(v)):
@@ -1670,14 +1620,14 @@ class MainWindow(QtWidgets.QMainWindow):
             shape = self.labelList.get_shape_from_item(item)
             if 'rack' in shape.label:
                 racks.append(shape)
-        # Todo: figure out how to delete shapes or annotations from the list
-        for rack in racks[1:]:
-            self.labelList.removeItemWidget(self.labelList.get_item_from_shape(rack))
-            del rack
         points = []
         for rack in racks:
             points.append(self.qpointToPointcloud(rack.points[0]))
             points.append(self.qpointToPointcloud(rack.points[1]))
+        self.remLabels(racks[1:])
+        if self.noShapes():
+            for action in self.actions.onShapesPresent:
+                action.setEnabled(False)
         racks[0].points[0] = self.pointcloudToQpoint(np.min(points, axis=0))
         racks[0].points[1] = self.pointcloudToQpoint(np.max(points, axis=0))
         self.updatePixmap()
