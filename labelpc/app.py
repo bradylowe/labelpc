@@ -1356,15 +1356,15 @@ class MainWindow(QtWidgets.QMainWindow):
         # Todo: test this function
         box = np.array([self.qpointToPointcloud(rack.points[0]), self.qpointToPointcloud(rack.points[1])])
         if abs(box[0][0] - box[1][0]) > abs(box[0][1] - box[1][1]):
-            box_up = box + np.array((0.0, 2.0))
-            box_down = box - np.array((0.0, 2.0))
+            box_up = box + np.array((0.0, self._config[rack.label]))
+            box_down = box - np.array((0.0, self._config[rack.label]))
             if self.pointcloud.in_box_2d(box_up).sum() > self.pointcloud.in_box_2d(box_down).sum():
-                return 2
-            else:
                 return 0
+            else:
+                return 2
         else:
-            box_left = box + np.array((2.0, 0.0))
-            box_right = box - np.array((2.0, 0.0))
+            box_left = box + np.array((self._config[rack.label], 0.0))
+            box_right = box - np.array((self._config[rack.label], 0.0))
             if self.pointcloud.in_box_2d(box_left).sum() > self.pointcloud.in_box_2d(box_right).sum():
                 return 1
             else:
@@ -1710,7 +1710,7 @@ class MainWindow(QtWidgets.QMainWindow):
         racks[0].points[1] = self.pointcloudToQpoint(np.max(points, axis=0))
         self.updatePixmap()
 
-    def breakRack(self, pos, rack=None, orientation=None, tighten=False):
+    def breakRack(self, pos, rack=None, orientation=None, tighten=False, orient=False):
         # If rack starts as None, then pos must start as QtCore.QPointF
         if rack is None:
             for item, shape in self.labelList.itemsToShapes:
@@ -1735,6 +1735,8 @@ class MainWindow(QtWidgets.QMainWindow):
         if tighten:
             self.tightenRack(rack)
             self.tightenRack(new_rack)
+        if orient:
+            new_rack.group_id = self.rackOrientation(new_rack)
         if not self.isRackBigEnough(rack):
             self.remLabels([rack])
             if self.noShapes():
@@ -1800,10 +1802,12 @@ class MainWindow(QtWidgets.QMainWindow):
         dims = np.abs(bounds[1] - bounds[0])
         if abs(dims[0] - self._config[rack.label] * 2.0) < abs(dims[1] - self._config[rack.label] * 2.0):
             middle = (rack.points[0].x() + rack.points[1].x()) / 2.0
-            self.breakRack(middle, rack, 0, tighten=True)
+            new_rack = self.breakRack(middle, rack, 0, tighten=True, orient=True)
         else:
             middle = (rack.points[0].y() + rack.points[1].y()) / 2.0
-            self.breakRack(middle, rack, 1, tighten=True)
+            new_rack = self.breakRack(middle, rack, 1, tighten=True, orient=True)
+        rack.group_id = self.rackOrientation(rack)
+        return new_rack
 
     def rotateShapes(self, angle):
         theta = np.radians(angle)
