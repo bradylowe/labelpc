@@ -840,7 +840,6 @@ class MainWindow(QtWidgets.QMainWindow):
             for action in self.actions.on3dViewerActive:
                 action.setEnabled(viewer)
 
-
     def canvasShapeEdgeSelected(self, selected, shape):
         self.actions.addPointToEdge.setEnabled(
             selected and shape and shape.canAddPoint()
@@ -1310,7 +1309,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 for rack in self.racks:
                     breaks, pos, orient = self.beamBreaksRack(shape, rack)
                     if breaks:
-                        self.breakRack(rack, pos, orient)
+                        self.breakRack(pos, rack, orient)
             elif text == 'pole':
                 transformed = self.qpointToPointcloud(shape.points[0])
                 snapped = self.pointcloud.snap_to_center(transformed, self._config['snap_center_thresh'])
@@ -1353,13 +1352,23 @@ class MainWindow(QtWidgets.QMainWindow):
                 return True, beam.points[0].y(), 1
         return False, None, None
 
-    @staticmethod
-    def rackOrientation(rack):
-        # Todo: check orientation more in detail to return number [0 1 2 3]
-        if abs(rack.points[0].x() - rack.points[1].x()) > abs(rack.points[0].y() - rack.points[1].y()):
-            return 0
+    def rackOrientation(self, rack):
+        # Todo: test this function
+        box = np.array([self.qpointToPointcloud(rack.points[0]), self.qpointToPointcloud(rack.points[1])])
+        if abs(box[0][0] - box[1][0]) > abs(box[0][1] - box[1][1]):
+            box_up = box + np.array((0.0, 2.0))
+            box_down = box - np.array((0.0, 2.0))
+            if self.pointcloud.in_box_2d(box_up).sum() > self.pointcloud.in_box_2d(box_down).sum():
+                return 2
+            else:
+                return 0
         else:
-            return 1
+            box_left = box + np.array((2.0, 0.0))
+            box_right = box - np.array((2.0, 0.0))
+            if self.pointcloud.in_box_2d(box_left).sum() > self.pointcloud.in_box_2d(box_right).sum():
+                return 1
+            else:
+                return 3
 
     def isOutsideWall(self, shape):
         outside = np.zeros(len(shape.points), dtype=bool)
@@ -1683,10 +1692,6 @@ class MainWindow(QtWidgets.QMainWindow):
         # Todo: interpolate beam positions based off of current beam positions and wall bounds
         pass
 
-    def bringRackInsideWalls(self, rack, outside):
-        # Todo: implement this function
-        walls = self.walls
-
     def unbreakRack(self):
         racks = []
         for item in self.labelList.selectedItems():
@@ -1705,18 +1710,19 @@ class MainWindow(QtWidgets.QMainWindow):
         racks[0].points[1] = self.pointcloudToQpoint(np.max(points, axis=0))
         self.updatePixmap()
 
-    def breakRack(self, rack=None, pos=None, orientation=None, tighten=False):
+    def breakRack(self, pos, rack=None, orientation=None, tighten=False):
+        # If rack starts as None, then pos must start as QtCore.QPointF
         if rack is None:
             for item, shape in self.labelList.itemsToShapes:
-                if 'rack' in shape.label and shape.containsPoint(self.canvas.prevPoint):
+                if 'rack' in shape.label and shape.containsPoint(pos):
                     rack = shape
                     if rack.group_id % 2:
-                        pos = self.canvas.prevPoint.y()
+                        pos = pos.y()
                     else:
-                        pos = self.canvas.prevPoint.x()
+                        pos = pos.x()
                     break
-        if rack is None:
-            return
+            if rack is None:
+                return
         new_rack = rack.copy()
         if orientation is None:
             orientation = rack.group_id
@@ -1749,7 +1755,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 for rack in racks:
                     broke_rack, pos, orient = self.beamBreaksRack(beam, rack)
                     if broke_rack:
-                        self.breakRack(rack, pos, orient)
+                        self.breakRack(pos, rack, orient)
                         break
 
     def isRackBigEnough(self, rack):
@@ -1794,10 +1800,10 @@ class MainWindow(QtWidgets.QMainWindow):
         dims = np.abs(bounds[1] - bounds[0])
         if abs(dims[0] - self._config[rack.label] * 2.0) < abs(dims[1] - self._config[rack.label] * 2.0):
             middle = (rack.points[0].x() + rack.points[1].x()) / 2.0
-            self.breakRack(rack, middle, 0, tighten=True)
+            self.breakRack(middle, rack, 0, tighten=True)
         else:
             middle = (rack.points[0].y() + rack.points[1].y()) / 2.0
-            self.breakRack(rack, middle, 1, tighten=True)
+            self.breakRack(middle, rack, 1, tighten=True)
 
     def rotateShapes(self, angle):
         theta = np.radians(angle)
