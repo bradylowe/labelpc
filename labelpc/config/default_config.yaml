@@ -5,10 +5,11 @@ keep_prev: false
 keep_prev_scale: false
 logger_level: info
 
-select_rack: 1.1
-drive_in_rack: 2.4
-extra_deep_rack: 7.2
+select_rack: [1.22, 1.0, 1]
+drive_in_rack: [1.385, 1.2, 2]
+extra_deep_rack: [1.385, 1.2, 6]
 snap_center_thresh: 0.5
+snap_corner_thresh: 0.5
 
 flags: null
 label_flags: null
