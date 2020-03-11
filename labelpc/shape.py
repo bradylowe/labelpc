@@ -39,9 +39,11 @@ class Shape(object):
     scale = 1.0
 
     def __init__(self, label=None, line_color=None, shape_type=None,
-                 flags=None, group_id=None):
+                 flags=None, group_id=None, orient=None, rack_id=None):
         self.label = label
         self.group_id = group_id
+        self.orient = orient
+        self.rack_id = rack_id
         self.points = []
         self.lines = []
         self.fill = False
