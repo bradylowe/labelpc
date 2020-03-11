@@ -43,6 +43,7 @@ class Shape(object):
         self.label = label
         self.group_id = group_id
         self.points = []
+        self.lines = []
         self.fill = False
         self.selected = False
         self.shape_type = shape_type
@@ -85,6 +86,9 @@ class Shape(object):
             self.close()
         else:
             self.points.append(point)
+
+    def addLine(self, line):
+            self.lines.append(line)
 
     def canAddPoint(self):
         return self.shape_type in ['polygon', 'linestrip']
@@ -146,7 +150,7 @@ class Shape(object):
                 line_path.moveTo(self.points[0])
                 self.drawVertex(vrtx_path, 0)
             else:
-                
+                line_path.moveTo(self.points[0])
                 # Uncommenting the following line will draw 2 paths
                 # for the 1st vertex, and make it non-filled, which
                 # may be desirable.
@@ -161,6 +165,9 @@ class Shape(object):
             painter.drawPath(line_path)
             painter.drawPath(vrtx_path)
             painter.fillPath(vrtx_path, self._vertex_fill_color)
+            if self.shape_type == 'beam':
+                for line in self.lines:
+                    painter.drawLine(line)
             if self.fill:
                 color = self.select_fill_color \
                     if self.selected else self.fill_color

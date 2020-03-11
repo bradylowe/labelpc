@@ -911,7 +911,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.canvas.setEditing(edit)
         self.canvas.createMode = createMode
 
-        if createMode not in ['polygon', 'rectangle', 'circle', 'line', 'point', 'linestrip']:
+        if createMode not in ['polygon', 'rectangle', 'circle', 'line', 'point', 'linestrip', 'beam']:
             raise ValueError('Unsupported createMode: %s' % createMode)
 
         self.actions.createMode.setEnabled(createMode != 'polygon')

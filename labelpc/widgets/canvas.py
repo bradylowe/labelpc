@@ -303,6 +303,16 @@ class Canvas(QtWidgets.QWidget):
         self.hEdge = None
         self.movingShape = True  # Save changes
 
+    def getEdges(self, point):
+        w, h = self.pixmap.width(), self.pixmap.height()
+        x1 = QtCore.QPoint(point.x(), 0)
+        x2 = QtCore.QPoint(point.x(), w)
+        y1 = QtCore.QPoint(0, point.y())
+        y2 = QtCore.QPoint(h, point.y())
+        line1 = QtCore.QLine(x1, x2)
+        line2 = QtCore.QLine(y1, y2)
+        return line1, line2
+
     def mousePressEvent(self, ev):
         if QT5:
             pos = self.transformPos(ev.localPos())
@@ -330,7 +340,12 @@ class Canvas(QtWidgets.QWidget):
                     # Create new shape.
                     self.current = Shape(shape_type=self.createMode)
                     self.current.addPoint(pos)
-                    if self.createMode in ['point', 'beam']:
+                    if self.createMode =='point':
+                        self.finalise()
+                    elif self.createMode == 'beam':
+                        linex, liney = self.getEdges(pos)
+                        self.current.addLine(linex)
+                        self.current.addLine(liney)
                         self.finalise()
                     else:
                         if self.createMode == 'circle':
