@@ -204,7 +204,7 @@ class Canvas(QtWidgets.QWidget):
             elif self.createMode == 'point':
                 self.line.points = [self.current[0]]
                 self.line.close()
-            elif self.createMode == 'point':
+            elif self.createMode == 'beam':
                 self.line.points = [self.current[0]]
                 self.line.close()
             
