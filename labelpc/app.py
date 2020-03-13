@@ -366,14 +366,14 @@ class MainWindow(QtWidgets.QMainWindow):
             self.tr('Start drawing points'),
             enabled=False,
         )
-        createBeamMode = action(
-            self.tr('Create Beam'),
-            lambda: self.toggleDrawMode(False, createMode='beam'),
-            shortcuts['create_point'],
-            'objects',
-            self.tr('Start drawing points'),
-            enabled=False,
-        )
+        # createBeamMode = action(
+        #     self.tr('Create Beam'),
+        #     lambda: self.toggleDrawMode(False, createMode='beam'),
+        #     shortcuts['create_point'],
+        #     'objects',
+        #     self.tr('Start drawing points'),
+        #     enabled=False,
+        # )
         createLineStripMode = action(
             self.tr('Create LineStrip'),
             lambda: self.toggleDrawMode(False, createMode='linestrip'),
@@ -520,7 +520,7 @@ class MainWindow(QtWidgets.QMainWindow):
             createCircleMode=createCircleMode,
             createLineMode=createLineMode,
             createPointMode=createPointMode,
-            createBeamMode=createBeamMode,
+            #createBeamMode=createBeamMode,
             createLineStripMode=createLineStripMode,
             zoom=zoom, zoomIn=zoomIn, zoomOut=zoomOut, zoomOrg=zoomOrg,
             fitWindow=fitWindow, fitWidth=fitWidth,
@@ -828,7 +828,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.actions.createLineMode.setEnabled(True)
         self.actions.createPointMode.setEnabled(True)
         self.actions.createLineStripMode.setEnabled(True)
-        self.actions.createBeamMode.setEnabled(True)
+        #self.actions.createBeamMode.setEnabled(True)
         title = __appname__
         if self.filename is not None:
             title = '{} - {}'.format(title, self.filename)
@@ -922,7 +922,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.canvas.setEditing(edit)
         self.canvas.createMode = createMode
 
-        if createMode not in ['beam', 'polygon', 'rectangle', 'circle', 'line', 'point', 'linestrip']:
+        if createMode not in ['polygon', 'rectangle', 'circle', 'line', 'point', 'linestrip']:
             raise ValueError('Unsupported createMode: %s' % createMode)
 
         self.actions.createMode.setEnabled(createMode != 'polygon')
@@ -931,7 +931,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.actions.createLineMode.setEnabled(createMode != 'line')
         self.actions.createPointMode.setEnabled(createMode != 'point')
         self.actions.createLineStripMode.setEnabled(createMode != 'linestrip')
-        self.actions.createBeamMode.setEnabled(createMode != 'beam')
+        #self.actions.createBeamMode.setEnabled(createMode != 'beam')
         self.actions.editMode.setEnabled(not edit)
 
     def setEditMode(self):
@@ -1014,17 +1014,17 @@ class MainWindow(QtWidgets.QMainWindow):
             self.annotationMode = None
             return
         label = items[0].data(Qt.UserRole)
-        if label not in ['beam', 'select_rack', 'drive_in_rack', 'extra_deep_rack', 'pole', 'door', 'walls', 'noise']:
+        if label not in [ 'select_rack', 'drive_in_rack', 'extra_deep_rack', 'pole', 'door', 'walls', 'noise', 'beam']:
             self._config['display_label_popup'] = True
             self.annotationMode = None
             return
 
         self._config['display_label_popup'] = False
         self.annotationMode = label
-        if label == 'pole':
+        if label in ['pole', 'beam']:
             self.toggleDrawMode(False, createMode='point')
-        if label == 'beam':
-            self.toggleDrawMode(False, createMode='beam')
+        # if label == 'beam':
+        #     self.toggleDrawMode(False, createMode='beam')
         elif 'rack' in label:
             self.toggleDrawMode(False, createMode='rectangle')
         elif label == 'door':
