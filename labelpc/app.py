@@ -944,7 +944,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.actions.undo.setEnabled(not drawing)
         self.actions.delete.setEnabled(not drawing)
 
-    def toggleDrawMode(self, edit=True, createMode='polygon'):
+    def toggleDrawMode(self, edit=True, createMode='polygon', showPopup=True):
+        self._config['display_label_popup'] = showPopup
         self.canvas.setEditing(edit)
         self.canvas.createMode = createMode
 
@@ -1040,24 +1041,22 @@ class MainWindow(QtWidgets.QMainWindow):
             self.annotationMode = None
             return
         label = items[0].data(Qt.UserRole)
-        if label not in [ 'select_rack', 'drive_in_rack', 'extra_deep_rack', 'pole', 'door', 'walls', 'noise', 'beam']:
+        if label not in self._config['labels']:
             self._config['display_label_popup'] = True
             self.annotationMode = None
             return
 
-        self._config['display_label_popup'] = False
         self.annotationMode = label
         if label in ['pole', 'beam']:
-            self.toggleDrawMode(False, createMode='point')
+            self.toggleDrawMode(False, createMode='point', showPopup=False)
         # if label == 'beam':
         #     self.toggleDrawMode(False, createMode='beam')
         elif 'rack' in label:
-            self.toggleDrawMode(False, createMode='rectangle')
+            self.toggleDrawMode(False, createMode='rectangle', showPopup=False)
         elif label == 'door':
             self.toggleDrawMode(False, createMode='line')
-            self._config['display_label_popup'] = True
         elif label in ['walls', 'noise']:
-            self.toggleDrawMode(False, createMode='polygon')
+            self.toggleDrawMode(False, createMode='polygon', showPopup=False)
 
     def fileSearchChanged(self):
         self.importDirImages(
