@@ -262,16 +262,24 @@ class Shape(object):
 
     @staticmethod
     def rectangleToPolygon(rect):
-        rect.shape_type = 'polygon'
+        polygon = rect.copy()
+        polygon.shape_type = 'polygon'
         p1, p2 = rect.points
         x1, y1 = p1.x(), p1.y()
         x2, y2 = p2.x(), p2.y()
-        rect.points = []
-        rect.addPoint(QtCore.QPointF(x1, y1))
-        rect.addPoint(QtCore.QPointF(x1, y2))
-        rect.addPoint(QtCore.QPointF(x2, y2))
-        rect.addPoint(QtCore.QPointF(x2, y1))
-        return rect
+        polygon.points = []
+        polygon.addPoint(QtCore.QPointF(x1, y1))
+        polygon.addPoint(QtCore.QPointF(x1, y2))
+        polygon.addPoint(QtCore.QPointF(x2, y2))
+        polygon.addPoint(QtCore.QPointF(x2, y1))
+        return polygon
+
+    def rectIntersection(self, other):
+        xA = max(self.points[0].x(), other.points[0].x())
+        yA = min(self.points[0].y(), other.points[0].y())
+        xB = min(self.points[1].x(), other.points[1].x())
+        yB = max(self.points[1].y(), other.points[1].y())
+        return max(0, xB - xA + 1), max(0, yA - yB + 1)
 
     def copy(self):
         return copy.deepcopy(self)
