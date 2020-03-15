@@ -1051,11 +1051,11 @@ class MainWindow(QtWidgets.QMainWindow):
             self.toggleDrawMode(False, createMode='point', showPopup=False)
         # if label == 'beam':
         #     self.toggleDrawMode(False, createMode='beam')
-        elif 'rack' in label:
+        elif 'rack' in label or label == 'noise':
             self.toggleDrawMode(False, createMode='rectangle', showPopup=False)
         elif label == 'door':
             self.toggleDrawMode(False, createMode='line')
-        elif label in ['walls', 'noise']:
+        elif label == 'walls':
             self.toggleDrawMode(False, createMode='polygon', showPopup=False)
 
     def fileSearchChanged(self):
@@ -1370,11 +1370,10 @@ class MainWindow(QtWidgets.QMainWindow):
                 #self.showRackHistogram(shape, axis='short')
                 #self.showRackHistogram(shape, axis='long')
                 if self.isTwoRacks(shape):
-                    new_shape = self.breakBackToBackRacks(shape)
-                    print(shape.orient, new_shape.orient)
+                    self.breakBackToBackRacks(shape)
                 else:
-                    print(shape.orient)
                     self.resolveRackRackIntersection(shape)
+                    self.resolveRackRackIntersection(shape, noise=True)
                     self.resolveRackWallIntersection(shape)
                     self.tightenRack(shape)
             self.addLabel(shape)
@@ -2443,8 +2442,12 @@ class MainWindow(QtWidgets.QMainWindow):
             else:
                 item.setSelected(False)
 
-    def resolveRackRackIntersection(self, rack):
-        for other in self.racks:
+    def resolveRackRackIntersection(self, rack, noise=False):
+        if noise:
+            rectangles = self.noise
+        else:
+            rectangles = self.racks
+        for other in rectangles:
             overlap_x, overlap_y = rack.rectIntersection(other)
             if not overlap_x * overlap_y:
                 continue
@@ -2460,5 +2463,37 @@ class MainWindow(QtWidgets.QMainWindow):
                     rack.points[1].setY(rack.points[1].x() - overlap_x)
 
     def resolveRackWallIntersection(self, rack):
-        pass
+        walls = self.walls
+        if not walls:
+            return
+
+        def linesIntersect(p1, p2, p3, p4):
+            r = p2 - p1
+            s = p4 - p3
+            d = r.x() * s.y() - r.y() * s.x()
+            u = ((p3.x() - p1.x()) * r.y() - (p3.y() - p1.y()) * r.x()) / d
+            t = ((p3.x() - p1.x()) * s.y() - (p3.y() - p1.y()) * s.x()) / d
+            if (0 <= u <= 1) and (0 <= t <= 1):
+                return p1 + t * r
+            else:
+                return False
+
+        rack_polygon = Shape.rectangleToPolygon(rack)
+
+        for i in range(len(walls.points)):
+            p1, p2 = walls.points[i], walls.points[(i+1) % len(walls.points)]
+            for j in range(len(rack_polygon.points)):
+                # j == 0, 1, 2, 3 --> left, top, right, bottom
+                p3, p4 = rack_polygon.points[j], rack_polygon.points[(j+1) % len(rack_polygon.points)]
+                intersection = linesIntersect(p1, p2, p3, p4)
+                p3_inside = walls.containsPoint(p3)
+                if intersection:
+                    if (j == 0 and not p3_inside) or (j == 2 and p3_inside):
+                        rack.points[0].setY(intersection.y())
+                    elif (j == 0 and p3_inside) or (j == 2 and not p3_inside):
+                        rack.points[1].setY(intersection.y())
+                    elif (j == 1 and not p3_inside) or (j == 3 and p3_inside):
+                        rack.points[0].setX(intersection.x())
+                    elif (j == 1 and p3_inside) or (j == 3 and not p3_inside):
+                        rack.points[1].setX(intersection.x())
 
