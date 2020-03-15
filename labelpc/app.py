@@ -1160,6 +1160,9 @@ class MainWindow(QtWidgets.QMainWindow):
         for shape in shapes:
             item = self.labelList.get_item_from_shape(shape)
             self.labelList.takeItem(self.labelList.row(item))
+            idx = self.labelList.get_index_from_shape(shape)
+            if idx is not None:
+                del self.labelList.itemsToShapes[idx]
 
     def loadShapes(self, shapes, replace=True):
         self._noSelectionSlot = True
@@ -1390,30 +1393,58 @@ class MainWindow(QtWidgets.QMainWindow):
             self.canvas.shapesBackups.pop()
 
     def beamBreaksRack(self, beam, rack):
-        dist_thresh = 2.0
+        front_dist, back_dist = 2.0, 0.4
         if not rack.orient % 2 and rack.points[0].x() < beam.points[0].x() < rack.points[1].x():
-            min_dist = min(abs(rack.points[0].y() - beam.points[0].y()), abs(rack.points[1].y() - beam.points[0].y()))
-            if min_dist < dist_thresh / self.scale:
+            if rack.orient == 0:
+                max_y, min_y = rack.points[0].y() + back_dist / self.scale, rack.points[1].y() - front_dist / self.scale
+            else:
+                max_y, min_y = rack.points[0].y() + front_dist / self.scale, rack.points[1].y() - back_dist / self.scale
+            if min_y < beam.points[0].y() < max_y:
                 return True, beam.points[0].x(), 0
-        elif rack.orient % 2 and rack.points[0].y() < beam.points[0].y() < rack.points[1].y():
-            min_dist = min(abs(rack.points[0].x() - beam.points[0].x()), abs(rack.points[1].x() - beam.points[0].x()))
-            if min_dist < dist_thresh / self.scale:
+        elif rack.orient % 2 and rack.points[1].y() < beam.points[0].y() < rack.points[0].y():
+            if rack.orient == 1:
+                min_x, max_x = rack.points[0].x() - back_dist / self.scale, rack.points[1].x() + front_dist / self.scale
+            else:
+                min_x, max_x = rack.points[0].x() - front_dist / self.scale, rack.points[1].x() + back_dist / self.scale
+            if min_x < beam.points[0].x() < max_x:
                 return True, beam.points[0].y(), 1
         return False, None, None
 
     def rackOrientation(self, rack):
         # Todo: test this function
         box = np.array([self.qpointToPointcloud(rack.points[0]), self.qpointToPointcloud(rack.points[1])])
+        walls = self.walls
+        # If rack is longer in the x-direction
         if abs(box[0][0] - box[1][0]) > abs(box[0][1] - box[1][1]):
+            # Grab a box above and below the rack
             box_up = box + np.array((0.0, self._config[rack.label][1]))
             box_down = box - np.array((0.0, self._config[rack.label][1]))
+            if walls is not None:
+                center_up = self.pointcloudToQpoint((box_up[0] + box_up[1]) / 2.0)
+                center_down = self.pointcloudToQpoint((box_down[0] + box_down[1]) / 2.0)
+                # Check to see if the upper or lower box goes outside the walls
+                if not walls.containsPoint(center_up):
+                    return 2
+                elif not walls.containsPoint(center_down):
+                    return 0
+            # Check to see if there is a bunch of stuff in the upper or lower box
             if self.pointcloud.in_box_2d(box_up).sum() > self.pointcloud.in_box_2d(box_down).sum():
                 return 0
             else:
                 return 2
         else:
+            # Grab a box to the left and right of the rack
             box_left = box + np.array((self._config[rack.label][1], 0.0))
             box_right = box - np.array((self._config[rack.label][1], 0.0))
+            if walls is not None:
+                center_left = self.pointcloudToQpoint((box_left[0] + box_left[1]) / 2.0)
+                center_right = self.pointcloudToQpoint((box_right[0] + box_right[1]) / 2.0)
+                # Check to see if the left or right box goes outside of the walls
+                if not walls.containsPoint(center_left):
+                    return 1
+                elif not walls.containsPoint(center_right):
+                    return 3
+            # Check to see if there is a bunch of stuff in the left or right box
             if self.pointcloud.in_box_2d(box_left).sum() > self.pointcloud.in_box_2d(box_right).sum():
                 return 1
             else:
@@ -1707,8 +1738,8 @@ class MainWindow(QtWidgets.QMainWindow):
             keep = self.pointcloud.in_box_2d(box)
         else:
             path = shape.makePath()
-            keep = np.array(len(self.pointcloud), dtype=bool)
-            for i, p in enumerate(self.pointcloud.points):
+            keep = np.zeros(len(self.pointcloud.points), dtype=bool)
+            for i, p in enumerate(self.pointcloud.points[['x', 'y']].values):
                 keep[i] = path.contains(self.pointcloudToQpoint(p))
         return keep
 
@@ -1895,7 +1926,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.addLabel(p)
         self.updatePixmap()
 
-    def houghRackPosition(self, rack):
+    def houghRackPosition(self, rack, threshold=0.5):
         # Filter points based on xy histogram
         box = [self.qpointToPointcloud(rack.points[0]), self.qpointToPointcloud(rack.points[1])]
         inbox = self.pointcloud.in_box_2d(box)
