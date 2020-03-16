@@ -48,10 +48,13 @@ from labelpc.pointcloud.Voxelize import VoxelGrid
 #   Snap to center
 #   --- Brady:
 #   Create annotations for individual slices ??? (floor, lights, evap. coils)
-#   Detect intersections (rack-rack, rack-wall, rack-noise)
 #   Make rack dimensions fit integer number of pallet locations
+#   Interpolate beam positions inside wall bounds or canvas bounds
+#   Make different shapes for i-beam and square beam
+#   Check beam breaking both back to back racks
 #   --- Austin:
 #   //DONE Add distance threshold for snap functions to config file (snapToCenter, snapToCorner, rackSep, rackSplit)
+#   Toggle on/off beams, racks, pallets, walls in view (checkbox for each group)
 #   //DONE Draw crosshairs on beams that span the canvas (toggle on/off)
 #   Interpolate beam positions inside wall bounds or canvas bounds
 #   Color one side of rectangle a different color based on group ID
@@ -192,7 +195,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.canvas.shapeMoved.connect(self.setDirty)
         self.canvas.selectionChanged.connect(self.shapeSelectionChanged)
         self.canvas.drawingPolygon.connect(self.toggleDrawingSensitive)
-        self.canvas.breakRack.connect(self.breakRack)
+        self.canvas.breakRack.connect(self.breakRackManual)
 
         self.setCentralWidget(scrollArea)
 
@@ -311,8 +314,8 @@ class MainWindow(QtWidgets.QMainWindow):
 
         merge_racks = action('Merge Racks', self.unbreakRack, None, 'merge selected racks',
                              'Merge the selected racks into a single rack (undo rack break)')
-        
-        show_crosshairs = action('Show beam crosshairs', self.showCrosshairs, None, icon='eye', tip='show crosshairs over beam annotations', 
+
+        show_crosshairs = action('Show beam crosshairs', self.showCrosshairs, None, icon='eye', tip='show crosshairs over beam annotations',
                                  checkable=True)
 
         rotate_rack = action('Rotate Rack', self.rotateRack, None, 'rotate selected rack',
@@ -320,6 +323,21 @@ class MainWindow(QtWidgets.QMainWindow):
 
         predict_pallets = action('Predict pallets', self.predictPalletsForAllRacks, None, 'predict pallet centers',
                                  'Predict the pallet locations for all the rack annotations')
+
+        select_pallets_by_rack = action('Select pallets by rack', self.selectPalletsByRack, None,
+                                        'Select pallets by rack',
+                                        'Select all pallets that belong to the selected rack')
+
+        select_pallets_by_group = action('Select pallets by group', self.selectPalletsByGroup, None,
+                                         'Select pallets by group',
+                                         'Select all pallets that belong to the selected rack group')
+
+        select_beams = action('Select beams', self.selectBeams, None, 'select beams', 'Select all beams')
+
+        select_pallets = action('Select pallets', self.selectPallets, None, 'select pallets', 'Select all pallets')
+
+        interpolate_beams = action('Interp beams', self.interpolateBeamPositions, None, 'interpolate beams',
+                                   'Interpolate beam positions based on existing beam positions')
 
         toggle_keep_prev_mode = action(
             self.tr('Keep Previous Annotation'),
@@ -531,6 +549,9 @@ class MainWindow(QtWidgets.QMainWindow):
             mergeRacks=merge_racks,
             rotateRack=rotate_rack,
             predictPallets=predict_pallets,
+            selectPalletsByRack=select_pallets_by_rack,
+            selectPalletsByGroup=select_pallets_by_group,
+            interpolateBeams=interpolate_beams,
             #fileMenuActions=(open_, opendir, save, saveAs, close, quit),
             fileMenuActions=(open_, save, saveAs, close, quit),
             tool=(),
@@ -563,6 +584,10 @@ class MainWindow(QtWidgets.QMainWindow):
                 undoLastPoint,
                 addPointToEdge,
                 removePoint,
+                select_pallets_by_rack,
+                select_pallets_by_group,
+                select_beams,
+                select_pallets,
             ),
             onLoadActive=(
                 close,
@@ -579,7 +604,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 editMode,
             ),
             onShapesPresent=(saveAs, hideAll, showAll, rotate_rack, merge_racks, break_all_racks, update_annotation,
-                             predict_pallets,),
+                             predict_pallets, select_pallets_by_rack, select_pallets_by_group, interpolate_beams),
             on3dViewerActive=(
                 highlight_slice,
                 check_highlight_slice,
@@ -683,6 +708,9 @@ class MainWindow(QtWidgets.QMainWindow):
             merge_racks,
             rotate_rack,
             predict_pallets,
+            select_pallets_by_group,
+            select_pallets_by_rack,
+            interpolate_beams,
         )
 
         self.statusBar().showMessage(self.tr('%s started.') % __appname__)
@@ -913,7 +941,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.actions.undo.setEnabled(not drawing)
         self.actions.delete.setEnabled(not drawing)
 
-    def toggleDrawMode(self, edit=True, createMode='polygon'):
+    def toggleDrawMode(self, edit=True, createMode='polygon', showPopup=True):
+        self._config['display_label_popup'] = showPopup
         self.canvas.setEditing(edit)
         self.canvas.createMode = createMode
 
@@ -1008,22 +1037,20 @@ class MainWindow(QtWidgets.QMainWindow):
             self.annotationMode = None
             return
         label = items[0].data(Qt.UserRole)
-        if label not in [ 'select_rack', 'drive_in_rack', 'extra_deep_rack', 'pole', 'door', 'walls', 'noise', 'beam']:
+        if label not in self._config['labels']:
             self._config['display_label_popup'] = True
             self.annotationMode = None
             return
 
-        self._config['display_label_popup'] = False
         self.annotationMode = label
         if label in ['pole', 'beam']:
-            self.toggleDrawMode(False, createMode='point')
-        elif 'rack' in label:
-            self.toggleDrawMode(False, createMode='rectangle')
+            self.toggleDrawMode(False, createMode='point', showPopup=False)
+        elif 'rack' in label or label == 'noise':
+            self.toggleDrawMode(False, createMode='rectangle', showPopup=False)
         elif label == 'door':
             self.toggleDrawMode(False, createMode='line')
-            self._config['display_label_popup'] = True
-        elif label in ['walls', 'noise']:
-            self.toggleDrawMode(False, createMode='polygon')
+        elif label == 'walls':
+            self.toggleDrawMode(False, createMode='polygon', showPopup=False)
 
     def fileSearchChanged(self):
         self.importDirImages(
@@ -1126,6 +1153,12 @@ class MainWindow(QtWidgets.QMainWindow):
         for shape in shapes:
             item = self.labelList.get_item_from_shape(shape)
             self.labelList.takeItem(self.labelList.row(item))
+            idx = self.labelList.get_index_from_shape(shape)
+            if idx is not None:
+                del self.labelList.itemsToShapes[idx]
+        if self.noShapes():
+            for action in self.actions.onShapesPresent:
+                action.setEnabled(False)
 
     def loadShapes(self, shapes, replace=True):
         self._noSelectionSlot = True
@@ -1310,10 +1343,7 @@ class MainWindow(QtWidgets.QMainWindow):
                     if not np.any(np.isnan(snapped)):
                         shape.points[0] = self.pointcloudToQpoint(snapped)
                 # Check for racks that this beam breaks and break them
-                for rack in self.racks:
-                    breaks, pos, orient = self.beamBreaksRack(shape, rack)
-                    if breaks:
-                        self.breakRack(pos, rack, orient)
+                self.breakAllRacksWithBeam(shape)
             elif text == 'pole':
                 transformed = self.qpointToPointcloud(shape.points[0])
                 snapped = self.pointcloud.snap_to_center(transformed, self._config['snap_center_thresh'])
@@ -1327,6 +1357,7 @@ class MainWindow(QtWidgets.QMainWindow):
                     if not np.any(np.isnan(snapped)):
                         shape.points[i] = self.pointcloudToQpoint(snapped)
             # If this is a new rack, split the rack into two racks if necessary and tighten box(es) to rack
+            # Calculate the orientation of the rack, and resolve any collisions with other racks, walls, or noise
             elif 'rack' in text:
                 shape.orient = self.rackOrientation(shape)
                 shape.group_id = self.curGroup
@@ -1334,10 +1365,18 @@ class MainWindow(QtWidgets.QMainWindow):
                 shape.rack_id = self.curRack
                 self.curRack += 1
                 self.tightenRack(shape)
-                self.showHistogram(shape, axis='short')
-                self.showHistogram(shape, axis='long')
+                #self.showRackHistogram(shape, axis='short')
+                #self.showRackHistogram(shape, axis='long')
                 if self.isTwoRacks(shape):
                     self.breakBackToBackRacks(shape)
+                else:
+                    self.tightenRack(shape)
+                    self.normalizeRackDimensions(shape)
+                    self.resolveRackRectIntersection(shape)
+                    self.resolveRackRectIntersection(shape, noise=True)
+                    self.resolveRackWallIntersection(shape)
+                    if not self.isRackBigEnough(shape):
+                        self.remLabels([shape])
             self.addLabel(shape)
             self.updatePixmap()
             self.actions.editMode.setEnabled(True)
@@ -1353,42 +1392,70 @@ class MainWindow(QtWidgets.QMainWindow):
             self.canvas.shapesBackups.pop()
 
     def beamBreaksRack(self, beam, rack):
-        dist_thresh = 2.0
+        front_dist, back_dist = 2.0, 0.2
         if not rack.orient % 2 and rack.points[0].x() < beam.points[0].x() < rack.points[1].x():
-            min_dist = min(abs(rack.points[0].y() - beam.points[0].y()), abs(rack.points[1].y() - beam.points[0].y()))
-            if min_dist < dist_thresh / self.scale:
+            if rack.orient == 0:
+                max_y, min_y = rack.points[0].y() + back_dist / self.scale, rack.points[1].y() - front_dist / self.scale
+            else:
+                max_y, min_y = rack.points[0].y() + front_dist / self.scale, rack.points[1].y() - back_dist / self.scale
+            if min_y < beam.points[0].y() < max_y:
                 return True, beam.points[0].x(), 0
-        elif rack.orient % 2 and rack.points[0].y() < beam.points[0].y() < rack.points[1].y():
-            min_dist = min(abs(rack.points[0].x() - beam.points[0].x()), abs(rack.points[1].x() - beam.points[0].x()))
-            if min_dist < dist_thresh / self.scale:
+        elif rack.orient % 2 and rack.points[1].y() < beam.points[0].y() < rack.points[0].y():
+            if rack.orient == 1:
+                min_x, max_x = rack.points[0].x() - back_dist / self.scale, rack.points[1].x() + front_dist / self.scale
+            else:
+                min_x, max_x = rack.points[0].x() - front_dist / self.scale, rack.points[1].x() + back_dist / self.scale
+            if min_x < beam.points[0].x() < max_x:
                 return True, beam.points[0].y(), 1
         return False, None, None
 
     def rackOrientation(self, rack):
-        # Todo: test this function
+        # If rack is near canvas edge
+        if rack.points[0].x() - 2.0 / self.scale < 0.0:
+            return 1
+        elif rack.points[0].y() + 2.0 / self.scale > self.canvas.height():
+            return 0
+        elif rack.points[1].x() + 2.0 / self.scale > self.canvas.width():
+            return 3
+        elif rack.points[1].y() - 2.0 / self.scale < 0.0:
+            return 2
         box = np.array([self.qpointToPointcloud(rack.points[0]), self.qpointToPointcloud(rack.points[1])])
+        walls = self.walls
+        # If rack is longer in the x-direction
         if abs(box[0][0] - box[1][0]) > abs(box[0][1] - box[1][1]):
+            # Grab a box above and below the rack
             box_up = box + np.array((0.0, self._config[rack.label][1]))
             box_down = box - np.array((0.0, self._config[rack.label][1]))
+            if walls is not None:
+                center_up = self.pointcloudToQpoint((box_up[0] + box_up[1]) / 2.0)
+                center_down = self.pointcloudToQpoint((box_down[0] + box_down[1]) / 2.0)
+                # Check to see if the upper or lower box goes outside the walls
+                if not walls.containsPoint(center_up):
+                    return 2
+                elif not walls.containsPoint(center_down):
+                    return 0
+            # Check to see if there is a bunch of stuff in the upper or lower box
             if self.pointcloud.in_box_2d(box_up).sum() > self.pointcloud.in_box_2d(box_down).sum():
                 return 0
             else:
                 return 2
         else:
+            # Grab a box to the left and right of the rack
             box_left = box + np.array((self._config[rack.label][1], 0.0))
             box_right = box - np.array((self._config[rack.label][1], 0.0))
+            if walls is not None:
+                center_left = self.pointcloudToQpoint((box_left[0] + box_left[1]) / 2.0)
+                center_right = self.pointcloudToQpoint((box_right[0] + box_right[1]) / 2.0)
+                # Check to see if the left or right box goes outside of the walls
+                if not walls.containsPoint(center_left):
+                    return 1
+                elif not walls.containsPoint(center_right):
+                    return 3
+            # Check to see if there is a bunch of stuff in the left or right box
             if self.pointcloud.in_box_2d(box_left).sum() > self.pointcloud.in_box_2d(box_right).sum():
                 return 1
             else:
                 return 3
-
-    def isOutsideWall(self, shape):
-        outside = np.zeros(len(shape.points), dtype=bool)
-        walls = self.walls
-        for i, point in enumerate(shape.points):
-            if not walls.containsPoint(point):
-                outside[i] = True
-        return outside
 
     def racksIntersect(self, rack, other):
         xA = max(rack.points[0].x(), other.points[0].x())
@@ -1678,12 +1745,12 @@ class MainWindow(QtWidgets.QMainWindow):
             keep = self.pointcloud.in_box_2d(box)
         else:
             path = shape.makePath()
-            keep = np.array(len(self.pointcloud), dtype=bool)
-            for i, p in enumerate(self.pointcloud.points):
+            keep = np.zeros(len(self.pointcloud.points), dtype=bool)
+            for i, p in enumerate(self.pointcloud.points[['x', 'y']].values):
                 keep[i] = path.contains(self.pointcloudToQpoint(p))
         return keep
 
-    def nearestCrosshairIntersection(self, point, threshold=0.3):
+    def nearestCrosshairIntersection(self, point, threshold=0.5):
         beams = []
         for item, shape in self.labelList.itemsToShapes:
             if shape.label == 'beam':
@@ -1700,7 +1767,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 intersected = True
         return intersection, intersected
 
-    def showCrosshairs(self, value):   
+    def showCrosshairs(self, value):
         for _, shape in self.labelList.itemsToShapes:
             if shape.label == 'beam':
                 point = shape.points[0]
@@ -1711,8 +1778,23 @@ class MainWindow(QtWidgets.QMainWindow):
                     shape.crosshairs = False
 
     def interpolateBeamPositions(self):
-        # Todo: interpolate beam positions based off of current beam positions and wall bounds
-        pass
+        x, y = [], []
+        beams = self.beams
+        if not beams:
+            return
+        for beam in beams:
+            x.append(beam.points[0].x())
+            y.append(beam.points[0].y())
+        self.remLabels(beams)
+        x, y = np.unique(x, axis=0), np.unique(y, axis=0)
+        for cur_x in x:
+            for cur_y in y:
+                new_shape = Shape(label='beam', shape_type='point')
+                new_shape.addPoint(QtCore.QPointF(cur_x, cur_y))
+                new_shape.close()
+                self.addLabel(new_shape)
+                self.breakAllRacksWithBeam(new_shape)
+        self.updatePixmap()
 
     def unbreakRack(self):
         racks = []
@@ -1732,19 +1814,27 @@ class MainWindow(QtWidgets.QMainWindow):
         racks[0].points[1] = self.pointcloudToQpoint(np.max(points, axis=0))
         self.updatePixmap()
 
-    def breakRack(self, pos, rack=None, orientation=None, tighten=False, orient=False):
-        # If rack starts as None, then pos must start as QtCore.QPointF
+    def breakRackManual(self, pos):
+        for item, shape in self.labelList.itemsToShapes:
+            if 'rack' in shape.label and shape.containsPoint(pos):
+                rack = shape
+                if rack.orient % 2:
+                    pos = pos.y()
+                else:
+                    pos = pos.x()
+                break
         if rack is None:
-            for item, shape in self.labelList.itemsToShapes:
-                if 'rack' in shape.label and shape.containsPoint(pos):
-                    rack = shape
-                    if rack.orient % 2:
-                        pos = pos.y()
-                    else:
-                        pos = pos.x()
-                    break
-            if rack is None:
-                return
+            return
+        else:
+            self.breakRack(pos, rack)
+
+    def breakAllRacksWithBeam(self, beam):
+        for rack in self.racks:
+            breaks, pos, orient = self.beamBreaksRack(beam, rack)
+            if breaks:
+                self.breakRack(pos, rack, orient)
+
+    def breakRack(self, pos, rack, orientation=None, tighten=False, orient=False):
         new_rack = rack.copy()
         new_rack.rack_id = self.curRack
         self.curRack += 1
@@ -1760,7 +1850,10 @@ class MainWindow(QtWidgets.QMainWindow):
             self.tightenRack(rack)
             self.tightenRack(new_rack)
         if orient:
+            rack.orient = self.rackOrientation(rack)
             new_rack.orient = self.rackOrientation(new_rack)
+        self.normalizeRackDimensions(rack)
+        self.normalizeRackDimensions(new_rack)
         if not self.isRackBigEnough(rack):
             self.remLabels([rack])
             if self.noShapes():
@@ -1787,7 +1880,9 @@ class MainWindow(QtWidgets.QMainWindow):
     def isRackBigEnough(self, rack):
         bounds = np.array([self.qpointToPointcloud(rack.points[0]), self.qpointToPointcloud(rack.points[1])])
         dims = np.abs(bounds[1] - bounds[0])
-        return not (dims < self._config[rack.label][1]).any()
+        if rack.orient % 2:
+            dims = np.swap(dims)
+        return not (dims < np.array(self._config[rack.label][:2])).any()
 
     def tightenRack(self, rack):
         box = np.array([self.qpointToPointcloud(rack.points[0]), self.qpointToPointcloud(rack.points[1])])
@@ -1811,29 +1906,21 @@ class MainWindow(QtWidgets.QMainWindow):
             rack.points[0], rack.points[1] = self.pointcloudToQpoint(box[0]), self.pointcloudToQpoint(box[1])
         else:
             self.remLabels([rack])
-            if self.noShapes():
-                for action in self.actions.onShapesPresent:
-                    action.setEnabled(False)
         self.setDirty()
-
-    def reshapeRackForPalletPositions(self, rack):
-        box = np.array([self.qpointToPointcloud(rack.points[0]), self.qpointToPointcloud(rack.points[1])])
-        dims = np.abs(box[1] - box[0])
-        if rack.orient % 2:
-            dims = np.flip(dims)
-        n_units = dims / np.array(self._config[rack.label][1])
-        n_units_int = n_units.astype(int)
-        increment = (n_units - n_units_int > 0.5).astype(int)
-        n_units_int += increment
-        dims = n_units_int * np.array(self._config[rack.label][1])
-        if rack.orient % 2:
-            dims = np.flip(dims)
-        box[1] = box[0] + dims
-        rack.points[1] = self.pointcloudToQpoint(box[1])
 
     def predictPalletsForAllRacks(self):
         for rack in self.racks:
             self.predictPalletsFromRack(rack)
+
+    def normalizeRackDimensions(self, rack):
+        box = np.array([self.qpointToPointcloud(rack.points[0]), self.qpointToPointcloud(rack.points[1])])
+        orient = rack.orient % 2
+        unit_dims = np.flip(self._config[rack.label][:2]) if orient else np.array(self._config[rack.label][:2])
+        total_dims = box[1] - box[0]
+        discrete_dims = (total_dims / unit_dims).astype(int)
+        discrete_dims += total_dims / unit_dims - discrete_dims > 0.6
+        box[1] = box[0] + unit_dims * discrete_dims
+        rack.points[0], rack.points[1] = self.pointcloudToQpoint(box[0]), self.pointcloudToQpoint(box[1])
 
     def predictPalletsFromRack(self, rack):
         box = np.array([self.qpointToPointcloud(rack.points[0]), self.qpointToPointcloud(rack.points[1])])
@@ -1858,7 +1945,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.addLabel(p)
         self.updatePixmap()
 
-    def houghRackPosition(self, rack):
+    def houghRackPosition(self, rack, threshold=0.5):
         # Filter points based on xy histogram
         box = [self.qpointToPointcloud(rack.points[0]), self.qpointToPointcloud(rack.points[1])]
         inbox = self.pointcloud.in_box_2d(box)
@@ -2181,9 +2268,6 @@ class MainWindow(QtWidgets.QMainWindow):
                 yes | no):
             self.remLabels(self.canvas.deleteSelected())
             self.setDirty()
-            if self.noShapes():
-                for action in self.actions.onShapesPresent:
-                    action.setEnabled(False)
 
     def copyShape(self):
         self.canvas.endMove(copy=True)
@@ -2281,6 +2365,14 @@ class MainWindow(QtWidgets.QMainWindow):
                 doors.append(shape)
         return doors
 
+    @property
+    def noise(self):
+        noise = []
+        for _, shape in self.labelList.itemsToShapes:
+            if shape.label == 'noise':
+                noise.append(shape)
+        return noise
+
     def importDirImages(self, dirpath, pattern=None, load=True):
         self.actions.openNextImg.setEnabled(True)
         self.actions.openPrevImg.setEnabled(True)
@@ -2321,7 +2413,7 @@ class MainWindow(QtWidgets.QMainWindow):
         images.sort(key=lambda x: x.lower())
         return images
 
-    def showHistogram(self, rack, axis='short'):
+    def showRackHistogram(self, rack, axis='short'):
         import matplotlib.pyplot as plt
         box = [self.qpointToPointcloud(rack.points[0]), self.qpointToPointcloud(rack.points[1])]
         inbox = self.pointcloud.in_box_2d(box)
@@ -2335,3 +2427,99 @@ class MainWindow(QtWidgets.QMainWindow):
             x = self.pointcloud.points.loc[inbox, 'y'].values
             plt.hist(x, bins=100)
         plt.show()
+
+    def selectPalletsByRack(self):
+        items = self.labelList.selectedItems()
+        idx = None
+        if items:
+            for item in items:
+                idx = self.labelList.get_shape_from_item(item).rack_id
+                item.setSelected(False)
+        if idx is None:
+            return
+        for item, shape in self.labelList.itemsToShapes:
+            if shape.rack_id == idx and shape.label == 'pallet':
+                item.setSelected(True)
+
+    def selectPalletsByGroup(self):
+        items = self.labelList.selectedItems()
+        idx = None
+        if items:
+            for item in items:
+                idx = self.labelList.get_shape_from_item(item).group_id
+                item.setSelected(False)
+        if idx is None:
+            return
+        for item, shape in self.labelList.itemsToShapes:
+            if shape.group_id == idx and shape.label == 'pallet':
+                item.setSelected(True)
+
+    def selectBeams(self):
+        for item, shape in self.labelList.itemsToShapes:
+            if shape.label == 'beam':
+                item.setSelected(True)
+            else:
+                item.setSelected(False)
+
+    def selectPallets(self):
+        for item, shape in self.labelList.itemsToShapes:
+            if shape.label == 'pallet':
+                item.setSelected(True)
+            else:
+                item.setSelected(False)
+
+    def resolveRackRectIntersection(self, rack, noise=False):
+        if noise:
+            rectangles = self.noise
+        else:
+            rectangles = self.racks
+        for other in rectangles:
+            overlap_x, overlap_y = rack.rectIntersection(other)
+            if not overlap_x * overlap_y:
+                continue
+            if overlap_x > overlap_y:
+                if (other.points[0] + other.points[1]).y() < (rack.points[0] + rack.points[1]).y():
+                    rack.points[1].setY(rack.points[1].y() + overlap_y)
+                else:
+                    rack.points[0].setY(rack.points[0].y() - overlap_y)
+            else:
+                if (other.points[0] + other.points[1]).x() < (rack.points[0] + rack.points[1]).x():
+                    rack.points[0].setX(rack.points[0].x() + overlap_x)
+                else:
+                    rack.points[1].setX(rack.points[1].x() - overlap_x)
+
+    def resolveRackWallIntersection(self, rack):
+        walls = self.walls
+        if not walls:
+            return
+
+        def linesIntersect(p1, p2, p3, p4):
+            r = p2 - p1
+            s = p4 - p3
+            d = r.x() * s.y() - r.y() * s.x()
+            u = ((p3.x() - p1.x()) * r.y() - (p3.y() - p1.y()) * r.x()) / d
+            t = ((p3.x() - p1.x()) * s.y() - (p3.y() - p1.y()) * s.x()) / d
+            if (0 <= u <= 1) and (0 <= t <= 1):
+                return p1 + t * r
+            else:
+                return False
+
+        rack_polygon = Shape.rectangleToPolygon(rack)
+
+        for i in range(len(walls.points)):
+            p1, p2 = walls.points[i], walls.points[(i+1) % len(walls.points)]
+            for j in range(len(rack_polygon.points)):
+                # j == 0, 1, 2, 3 --> left, top, right, bottom
+                p3, p4 = rack_polygon.points[j], rack_polygon.points[(j+1) % len(rack_polygon.points)]
+                intersection = linesIntersect(p1, p2, p3, p4)
+                p3_inside = walls.containsPoint(p3)
+                if intersection:
+                    if (j == 0 and not p3_inside) or (j == 2 and p3_inside):
+                        rack.points[0].setY(intersection.y())
+                    elif (j == 0 and p3_inside) or (j == 2 and not p3_inside):
+                        rack.points[1].setY(intersection.y())
+                    elif (j == 1 and not p3_inside) or (j == 3 and p3_inside):
+                        rack.points[0].setX(intersection.x())
+                    elif (j == 1 and p3_inside) or (j == 3 and not p3_inside):
+                        rack.points[1].setX(intersection.x())
+

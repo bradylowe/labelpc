@@ -579,7 +579,10 @@ class PointCloud:
         points = self.get_points_within(delta, point, return_z=True)
         points = points[points[:, 2] > 0.5]
         points = points[points[:, 2] < 7.0]
-        return np.average(points, axis=0)[:2]
+        if len(points) > 100:
+            return np.average(points, axis=0)[:2]
+        else:
+            return point
 
     def tighten_to_rack(self, box):
         points = self.points.loc[self.in_box_2d(box, self.points[['x', 'y']].values)][['x', 'y', 'z']].values
