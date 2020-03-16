@@ -312,8 +312,8 @@ class MainWindow(QtWidgets.QMainWindow):
         merge_racks = action('Merge Racks', self.unbreakRack, None, 'merge selected racks',
                              'Merge the selected racks into a single rack (undo rack break)')
         
-        show_crosshairs = action('Show beam crosshairs', self.showCrosshairs, None, 'show crosshairs', 
-                                 'Show crosshairs over beam annotations', checkable=True)
+        show_crosshairs = action('Show beam crosshairs', self.showCrosshairs, None, icon='eye', tip='show crosshairs over beam annotations', 
+                                 checkable=True)
 
         rotate_rack = action('Rotate Rack', self.rotateRack, None, 'rotate selected rack',
                              'Change the orientation of the selected rack')
@@ -1307,7 +1307,8 @@ class MainWindow(QtWidgets.QMainWindow):
                 else:
                     transformed = self.qpointToPointcloud(shape.points[0])
                     snapped = self.pointcloud.snap_to_center(transformed, self._config['snap_center_thresh'])
-                    shape.points[0] = self.pointcloudToQpoint(snapped)
+                    if not np.any(np.isnan(snapped)):
+                        shape.points[0] = self.pointcloudToQpoint(snapped)
                 # Check for racks that this beam breaks and break them
                 for rack in self.racks:
                     breaks, pos, orient = self.beamBreaksRack(shape, rack)
@@ -1316,13 +1317,15 @@ class MainWindow(QtWidgets.QMainWindow):
             elif text == 'pole':
                 transformed = self.qpointToPointcloud(shape.points[0])
                 snapped = self.pointcloud.snap_to_center(transformed, self._config['snap_center_thresh'])
-                shape.points[0] = self.pointcloudToQpoint(snapped)
+                if not np.any(np.isnan(snapped)):
+                    shape.points[0] = self.pointcloudToQpoint(snapped)
             # If this is a new wall, snap the points to the corners of the walls
             elif text in ['wall', 'walls']:
                 for i, p in enumerate(shape.points):
                     transformed = self.qpointToPointcloud(p)
                     snapped = self.pointcloud.snap_to_corner(transformed, self._config['snap_corner_thresh'])
-                    shape.points[i] = self.pointcloudToQpoint(snapped)
+                    if not np.any(np.isnan(snapped)):
+                        shape.points[i] = self.pointcloudToQpoint(snapped)
             # If this is a new rack, split the rack into two racks if necessary and tighten box(es) to rack
             elif 'rack' in text:
                 shape.orient = self.rackOrientation(shape)
