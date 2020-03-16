@@ -52,7 +52,7 @@ from labelpc.pointcloud.Voxelize import VoxelGrid
 #   Make rack dimensions fit integer number of pallet locations
 #   --- Austin:
 #   //DONE Add distance threshold for snap functions to config file (snapToCenter, snapToCorner, rackSep, rackSplit)
-#   Draw crosshairs on beams that span the canvas (toggle on/off)
+#   //DONE Draw crosshairs on beams that span the canvas (toggle on/off)
 #   Interpolate beam positions inside wall bounds or canvas bounds
 #   Color one side of rectangle a different color based on group ID
 #   //DONE Toggle individual annotations on/off (turn off SHOWALL)
@@ -369,14 +369,6 @@ class MainWindow(QtWidgets.QMainWindow):
             self.tr('Start drawing points'),
             enabled=False,
         )
-        # createBeamMode = action(
-        #     self.tr('Create Beam'),
-        #     lambda: self.toggleDrawMode(False, createMode='beam'),
-        #     shortcuts['create_point'],
-        #     'objects',
-        #     self.tr('Start drawing points'),
-        #     enabled=False,
-        # )
         createLineStripMode = action(
             self.tr('Create LineStrip'),
             lambda: self.toggleDrawMode(False, createMode='linestrip'),
@@ -523,7 +515,6 @@ class MainWindow(QtWidgets.QMainWindow):
             createCircleMode=createCircleMode,
             createLineMode=createLineMode,
             createPointMode=createPointMode,
-            #createBeamMode=createBeamMode,
             createLineStripMode=createLineStripMode,
             zoom=zoom, zoomIn=zoomIn, zoomOut=zoomOut, zoomOrg=zoomOrg,
             fitWindow=fitWindow, fitWidth=fitWidth,
@@ -833,7 +824,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self.actions.createLineMode.setEnabled(True)
         self.actions.createPointMode.setEnabled(True)
         self.actions.createLineStripMode.setEnabled(True)
-        #self.actions.createBeamMode.setEnabled(True)
         title = __appname__
         if self.filename is not None:
             title = '{} - {}'.format(title, self.filename)
@@ -936,7 +926,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self.actions.createLineMode.setEnabled(createMode != 'line')
         self.actions.createPointMode.setEnabled(createMode != 'point')
         self.actions.createLineStripMode.setEnabled(createMode != 'linestrip')
-        #self.actions.createBeamMode.setEnabled(createMode != 'beam')
         self.actions.editMode.setEnabled(not edit)
 
     def setEditMode(self):
@@ -1028,8 +1017,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self.annotationMode = label
         if label in ['pole', 'beam']:
             self.toggleDrawMode(False, createMode='point')
-        # if label == 'beam':
-        #     self.toggleDrawMode(False, createMode='beam')
         elif 'rack' in label:
             self.toggleDrawMode(False, createMode='rectangle')
         elif label == 'door':
@@ -1710,10 +1697,8 @@ class MainWindow(QtWidgets.QMainWindow):
                 intersected = True
         return intersection, intersected
 
-    def showCrosshairs(self, value):
-        
-        for item, shape in self.labelList.itemsToShapes:
-            # shape = self.labelList.get_shape_from_item(item)
+    def showCrosshairs(self, value):   
+        for _, shape in self.labelList.itemsToShapes:
             if shape.label == 'beam':
                 point = shape.points[0]
                 self.canvas.getEdges(shape, point)

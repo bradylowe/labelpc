@@ -204,9 +204,6 @@ class Canvas(QtWidgets.QWidget):
             elif self.createMode == 'point':
                 self.line.points = [self.current[0]]
                 self.line.close()
-            # elif self.createMode == 'beam':
-            #     self.line.points = [self.current[0]]
-            #     self.line.close()
             
             self.repaint()
             self.current.highlightClear()
@@ -343,11 +340,6 @@ class Canvas(QtWidgets.QWidget):
                     self.current.addPoint(pos)
                     if self.createMode =='point':
                         self.finalise()
-                    # elif self.createMode == 'beam':
-                    #     linex, liney = self.getEdges(pos)
-                    #     self.current.addLine(linex)
-                    #     self.current.addLine(liney)
-                    #     self.finalise()
                     else:
                         if self.createMode == 'circle':
                             self.current.shape_type = 'circle'
