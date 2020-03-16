@@ -134,7 +134,7 @@ class Shape(object):
                 if len(self.points) == 2:
                     rectangle = self.getRectFromLine(*self.points)
                     line_path.addRect(rectangle)
-                if 'pallet' in self.label:
+                if self.label == 'pallet':
                     self._vertex_fill_color = self.vertex_fill_color
                 else:
                     for i in range(len(self.points)):
@@ -197,7 +197,7 @@ class Shape(object):
             assert False, "unsupported vertex shape"
 
     def nearestVertex(self, point, epsilon):
-        if 'pallet' in self.label:
+        if self.label == 'pallet':
             return
         min_distance = float('inf')
         min_i = None
