@@ -1344,6 +1344,9 @@ class MainWindow(QtWidgets.QMainWindow):
                         shape.points[0] = self.pointcloudToQpoint(snapped)
                 # Check for racks that this beam breaks and break them
                 self.breakAllRacksWithBeam(shape)
+                # Set up beam crosshairs
+                self.canvas.getEdges(shape)
+                shape.crosshairs = self.actions.showCrosshairs.isChecked()
             elif text == 'pole':
                 transformed = self.qpointToPointcloud(shape.points[0])
                 snapped = self.pointcloud.snap_to_center(transformed, self._config['snap_center_thresh'])
@@ -1768,14 +1771,12 @@ class MainWindow(QtWidgets.QMainWindow):
         return intersection, intersected
 
     def showCrosshairs(self, value):
-        for _, shape in self.labelList.itemsToShapes:
-            if shape.label == 'beam':
-                point = shape.points[0]
-                self.canvas.getEdges(shape, point)
-                if value:
-                    shape.crosshairs = True
-                else:
-                    shape.crosshairs = False
+        for beam in self.beams:
+            if value:
+                beam.crosshairs = True
+            else:
+                beam.crosshairs = False
+        self.updatePixmap()
 
     def interpolateBeamPositions(self):
         x, y = [], []
