@@ -311,6 +311,9 @@ class MainWindow(QtWidgets.QMainWindow):
 
         merge_racks = action('Merge Racks', self.unbreakRack, None, 'merge selected racks',
                              'Merge the selected racks into a single rack (undo rack break)')
+        
+        show_crosshairs = action('Show beam crosshairs', self.showCrosshairs, None, 'show crosshairs', 
+                                 'Show crosshairs over beam annotations', checkable=True)
 
         rotate_rack = action('Rotate Rack', self.rotateRack, None, 'rotate selected rack',
                              'Change the orientation of the selected rack')
@@ -529,6 +532,7 @@ class MainWindow(QtWidgets.QMainWindow):
             highlightSlice=highlight_slice,
             checkHighlightSlice=check_highlight_slice,
             render3d=render_3d,
+            showCrosshairs=show_crosshairs,
             highlightWalls=highlight_walls,
             viewAnnotation3d=view_annotation_3d,
             updateAnnotation=update_annotation,
@@ -637,6 +641,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 render_3d,
                 check_highlight_slice,
                 view_annotation_3d,
+                show_crosshairs,
                 None,
                 zoomIn,
                 zoomOut,
@@ -1704,6 +1709,18 @@ class MainWindow(QtWidgets.QMainWindow):
                 intersection[1] = y
                 intersected = True
         return intersection, intersected
+
+    def showCrosshairs(self, value):
+        
+        for item, shape in self.labelList.itemsToShapes:
+            # shape = self.labelList.get_shape_from_item(item)
+            if shape.label == 'beam':
+                point = shape.points[0]
+                self.canvas.getEdges(shape, point)
+                if value:
+                    shape.crosshairs = True
+                else:
+                    shape.crosshairs = False
 
     def interpolateBeamPositions(self):
         # Todo: interpolate beam positions based off of current beam positions and wall bounds

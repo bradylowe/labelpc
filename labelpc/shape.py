@@ -50,6 +50,7 @@ class Shape(object):
         self.selected = False
         self.shape_type = shape_type
         self.flags = flags
+        self.crosshairs = False
 
         self._highlightIndex = None
         self._highlightMode = self.NEAR_VERTEX
@@ -167,9 +168,9 @@ class Shape(object):
             painter.drawPath(line_path)
             painter.drawPath(vrtx_path)
             painter.fillPath(vrtx_path, self._vertex_fill_color)
-            # if self.shape_type == 'beam':
-            #     for line in self.lines:
-            #         painter.drawLine(line)
+            if self.crosshairs:
+                for line in self.lines:
+                    painter.drawLine(line)
             if self.fill:
                 color = self.select_fill_color \
                     if self.selected else self.fill_color

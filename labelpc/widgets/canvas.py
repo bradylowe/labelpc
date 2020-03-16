@@ -303,15 +303,16 @@ class Canvas(QtWidgets.QWidget):
         self.hEdge = None
         self.movingShape = True  # Save changes
 
-    def getEdges(self, point):
+    def getEdges(self, shape, point):
         w, h = self.pixmap.width(), self.pixmap.height()
         x1 = QtCore.QPoint(point.x(), 0)
         x2 = QtCore.QPoint(point.x(), w)
         y1 = QtCore.QPoint(0, point.y())
         y2 = QtCore.QPoint(h, point.y())
-        line1 = QtCore.QLine(x1, x2)
-        line2 = QtCore.QLine(y1, y2)
-        return line1, line2
+        linex = QtCore.QLine(x1, x2)
+        liney = QtCore.QLine(y1, y2)
+        shape.lines.append(linex)
+        shape.lines.append(liney)
 
     def mousePressEvent(self, ev):
         if QT5:
