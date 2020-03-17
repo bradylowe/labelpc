@@ -1226,20 +1226,18 @@ class MainWindow(QtWidgets.QMainWindow):
             flag = item.checkState() == Qt.Checked
             flags[key] = flag
         try:
-            sourcePath = osp.relpath(
-                self.sourcePath, osp.dirname(filename))
             if osp.dirname(filename) and not osp.exists(osp.dirname(filename)):
                 os.makedirs(osp.dirname(filename))
             lf.save(
                 filename=filename,
                 shapes=shapes,
-                sourcePath=sourcePath,
+                sourcePath=self.sourcePath,
                 otherData=self.otherData,
                 flags=flags,
             )
             self.labelFile = lf
             items = self.fileListWidget.findItems(
-                self.sourcePath, Qt.MatchExactly
+                osp.dirname(self.sourcePath), Qt.MatchExactly
             )
             if len(items) > 0:
                 if len(items) != 1:
@@ -1549,6 +1547,9 @@ class MainWindow(QtWidgets.QMainWindow):
         #item.setCheckState(Qt.Checked if item.checkState() == Qt.Unchecked else Qt.Unchecked)
 
     def loadFile(self, filename):
+        labelfile = filename
+        if filename.endswith('.json'):
+            filename = LabelFile.get_source(filename)
         # changing fileListWidget loads file
         if filename in self.imageList and self.fileListWidget.currentRow() != self.imageList.index(filename):
             self.fileListWidget.setCurrentRow(self.imageList.index(filename))
@@ -1557,17 +1558,19 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.canvas.setEnabled(False)
         self.resetState()
-        self.sourcePath = osp.dirname(filename)
+        self.sourcePath = filename
         dialog = OpenFileDialog()
         if dialog.exec():
             self.max_points, self.scale, self.thickness = dialog.getInputs()
+        else:
+            return
         self.lastOpenDir = osp.dirname(filename)
         self.status(self.tr('Loading points from file'))
         self.loadPointCloud(filename)
         self.status(self.tr('Building pixel maps'))
         self.buildImageData()
         self.updatePixmap()
-        self.loadLabelsFile(filename)
+        self.loadLabelsFile(labelfile)
         self.setZoomAndScroll()
         self.canvas.setEnabled(True)
 
@@ -1604,7 +1607,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def buildImageData(self, scores=None):
         bitmaps = []
-        points = self.pointcloud.points.loc[self.pointcloud.showing.bools][['x', 'y', 'z']].values
+        points = self.pointcloud.points[['x', 'y', 'z']].values
         min_point, max_point = points.min(axis=0), points.max(axis=0)
         min_idx, max_idx = (min_point / self.scale).astype(int), (max_point / self.scale).astype(int)
         slices = VoxelGrid(points, (10000., 10000., self.thickness))
@@ -1882,7 +1885,7 @@ class MainWindow(QtWidgets.QMainWindow):
         bounds = np.array([self.qpointToPointcloud(rack.points[0]), self.qpointToPointcloud(rack.points[1])])
         dims = np.abs(bounds[1] - bounds[0])
         if rack.orient % 2:
-            dims = np.swap(dims)
+            dims = np.flip(dims)
         return not (dims < np.array(self._config[rack.label][:2])).any()
 
     def tightenRack(self, rack):

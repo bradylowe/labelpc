@@ -104,3 +104,16 @@ class LabelFile(object):
     @staticmethod
     def is_label_file(filename):
         return osp.splitext(filename)[1].lower() == LabelFile.suffix
+
+    @staticmethod
+    def get_source(filename):
+        try:
+            with open(filename) as f:
+                data = json.load(f)
+            sourcePath = data['sourcePath']
+            if sourcePath:
+                return sourcePath
+            else:
+                return filename
+        except Exception as e:
+            return filename.replace('.json', '.las')
