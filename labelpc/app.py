@@ -1176,11 +1176,15 @@ class MainWindow(QtWidgets.QMainWindow):
             shape_type = shape['shape_type']
             flags = shape['flags']
             group_id = shape.get('group_id')
+            rack_id = shape.get('rack_id')
+            orient = shape.get('orient')
 
             shape = Shape(
                 label=label,
                 shape_type=shape_type,
                 group_id=group_id,
+                rack_id=rack_id,
+                orient=orient
             )
             for p in points:
                 shape.addPoint(self.pointcloudToQpoint(p))
@@ -1214,6 +1218,8 @@ class MainWindow(QtWidgets.QMainWindow):
                 label=s.label.encode('utf-8') if PY2 else s.label,
                 points=[self.qpointToPointcloud(p) for p in s.points],
                 group_id=s.group_id,
+                rack_id=s.rack_id,
+                orient=s.orient,
                 shape_type=s.shape_type,
                 flags=s.flags
             )
@@ -2501,6 +2507,8 @@ class MainWindow(QtWidgets.QMainWindow):
             r = p2 - p1
             s = p4 - p3
             d = r.x() * s.y() - r.y() * s.x()
+            if abs(d) < 0.000001:
+                return False
             u = ((p3.x() - p1.x()) * r.y() - (p3.y() - p1.y()) * r.x()) / d
             t = ((p3.x() - p1.x()) * s.y() - (p3.y() - p1.y()) * s.x()) / d
             if (0 <= u <= 1) and (0 <= t <= 1):

@@ -54,7 +54,9 @@ class LabelFile(object):
                     points=s['points'],
                     shape_type=s.get('shape_type', 'polygon'),
                     flags=s.get('flags', {}),
-                    group_id=s.get('group_id')
+                    group_id=s.get('group_id'),
+                    rack_id=s.get('rack_id'),
+                    orient=s.get('orient')
                 )
                 for s in data['shapes']
             ]
