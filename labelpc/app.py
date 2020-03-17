@@ -339,6 +339,9 @@ class MainWindow(QtWidgets.QMainWindow):
         interpolate_beams = action('Interp beams', self.interpolateBeamPositions, None, 'interpolate beams',
                                    'Interpolate beam positions based on existing beam positions')
 
+        user_tighten_rack = action('Tighten rack', self.userTightenRack, None, 'tighten rack',
+                                   'Tighten the selected rack around the points in the point cloud')
+
         toggle_keep_prev_mode = action(
             self.tr('Keep Previous Annotation'),
             self.toggleKeepPrevMode,
@@ -552,6 +555,7 @@ class MainWindow(QtWidgets.QMainWindow):
             selectPalletsByRack=select_pallets_by_rack,
             selectPalletsByGroup=select_pallets_by_group,
             interpolateBeams=interpolate_beams,
+            userTightenRack=user_tighten_rack,
             #fileMenuActions=(open_, opendir, save, saveAs, close, quit),
             fileMenuActions=(open_, save, saveAs, close, quit),
             tool=(),
@@ -588,6 +592,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 select_pallets_by_group,
                 select_beams,
                 select_pallets,
+                user_tighten_rack,
             ),
             onLoadActive=(
                 close,
@@ -1804,7 +1809,6 @@ class MainWindow(QtWidgets.QMainWindow):
                 new_shape.close()
                 self.addLabel(new_shape)
                 self.breakAllRacksWithBeam(new_shape)
-        self.updatePixmap()
 
     def unbreakRack(self):
         racks = []
@@ -1817,11 +1821,10 @@ class MainWindow(QtWidgets.QMainWindow):
             points.append(self.qpointToPointcloud(rack.points[0]))
             points.append(self.qpointToPointcloud(rack.points[1]))
         self.remLabels(racks[1:])
-        if self.noShapes():
-            for action in self.actions.onShapesPresent:
-                action.setEnabled(False)
         racks[0].points[0] = self.pointcloudToQpoint(np.min(points, axis=0))
         racks[0].points[1] = self.pointcloudToQpoint(np.max(points, axis=0))
+        self.finalizeRack(racks[0], tighten=True, orient=True, normalize=True)
+        self.setDirty()
         self.updatePixmap()
 
     def breakRackManual(self, pos):
@@ -1837,14 +1840,18 @@ class MainWindow(QtWidgets.QMainWindow):
             return
         else:
             self.breakRack(pos, rack)
+            self.setDirty()
+            self.updatePixmap()
 
     def breakAllRacksWithBeam(self, beam):
         for rack in self.racks:
             breaks, pos, orient = self.beamBreaksRack(beam, rack)
             if breaks:
                 self.breakRack(pos, rack, orient)
+        self.setDirty()
+        self.updatePixmap()
 
-    def breakRack(self, pos, rack, orientation=None, tighten=False, orient=False):
+    def breakRack(self, pos, rack, orientation=None, tighten=False, orient=False, normalize=True):
         new_rack = rack.copy()
         new_rack.rack_id = self.curRack
         self.curRack += 1
@@ -1856,24 +1863,21 @@ class MainWindow(QtWidgets.QMainWindow):
         else:
             rack.points[1].setY(pos - 0.2)
             new_rack.points[0].setY(pos + 0.2)
-        if tighten:
-            self.tightenRack(rack)
-            self.tightenRack(new_rack)
-        if orient:
-            rack.orient = self.rackOrientation(rack)
-            new_rack.orient = self.rackOrientation(new_rack)
-        self.normalizeRackDimensions(rack)
-        self.normalizeRackDimensions(new_rack)
-        if not self.isRackBigEnough(rack):
-            self.remLabels([rack])
-            if self.noShapes():
-                for action in self.actions.onShapesPresent:
-                    action.setEnabled(False)
         if self.isRackBigEnough(new_rack):
             self.addLabel(new_rack)
-        self.updatePixmap()
-        self.setDirty()
+        self.finalizeRack(rack, tighten=tighten, orient=orient, normalize=normalize)
+        self.finalizeRack(new_rack, tighten=tighten, orient=orient, normalize=normalize)
         return new_rack
+
+    def finalizeRack(self, rack, tighten=False, orient=False, normalize=True):
+        if tighten:
+            self.tightenRack(rack)
+        if orient:
+            rack.orient = self.rackOrientation(rack)
+        if normalize:
+            self.normalizeRackDimensions(rack)
+        if not self.isRackBigEnough(rack):
+            self.remLabels([rack])
 
     def breakAllRacks(self):
         for beam in self.beams:
@@ -1916,11 +1920,20 @@ class MainWindow(QtWidgets.QMainWindow):
             rack.points[0], rack.points[1] = self.pointcloudToQpoint(box[0]), self.pointcloudToQpoint(box[1])
         else:
             self.remLabels([rack])
-        self.setDirty()
+
+    def userTightenRack(self):
+        item = self.labelList.selectedItems()[0]
+        rack = self.labelList.get_shape_from_item(item)
+        if 'rack' not in rack.label:
+            return
+        else:
+            self.finalizeRack(rack, tighten=True)
 
     def predictPalletsForAllRacks(self):
         for rack in self.racks:
             self.predictPalletsFromRack(rack)
+        self.setDirty()
+        self.updatePixmap()
 
     def normalizeRackDimensions(self, rack):
         box = np.array([self.qpointToPointcloud(rack.points[0]), self.qpointToPointcloud(rack.points[1])])
@@ -1953,7 +1966,6 @@ class MainWindow(QtWidgets.QMainWindow):
             min_corner[1 - orient], max_corner[1 - orient], center[1 - orient] = min_corner[1 - orient] + dims[1 - orient], max_corner[1 - orient] + dims[1 - orient], center[1 - orient] + dims[1 - orient]
         for p in pallets:
             self.addLabel(p)
-        self.updatePixmap()
 
     def houghRackPosition(self, rack, threshold=0.5):
         # Filter points based on xy histogram
