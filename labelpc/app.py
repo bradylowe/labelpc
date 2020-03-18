@@ -196,6 +196,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.canvas.selectionChanged.connect(self.shapeSelectionChanged)
         self.canvas.drawingPolygon.connect(self.toggleDrawingSensitive)
         self.canvas.breakRack.connect(self.breakRackManual)
+        self.canvas.rackChanged.connect(self.finalizeRack)
 
         self.setCentralWidget(scrollArea)
 
@@ -580,6 +581,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 createLineMode,
                 createPointMode,
                 createLineStripMode,
+                None,
                 editMode,
                 edit,
                 copy,
@@ -588,6 +590,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 undoLastPoint,
                 addPointToEdge,
                 removePoint,
+                None,
                 select_pallets_by_rack,
                 select_pallets_by_group,
                 select_beams,
@@ -1202,7 +1205,8 @@ class MainWindow(QtWidgets.QMainWindow):
                         for key in keys:
                             default_flags[key] = False
             shape.flags = default_flags
-            shape.flags.update(flags)
+            # Todo: figure out if we need flags or not
+            #shape.flags.update(flags)
 
             s.append(shape)
         self.loadShapes(s)
@@ -1807,6 +1811,8 @@ class MainWindow(QtWidgets.QMainWindow):
                 new_shape = Shape(label='beam', shape_type='point')
                 new_shape.addPoint(QtCore.QPointF(cur_x, cur_y))
                 new_shape.close()
+                self.canvas.getEdges(new_shape)
+                new_shape.crosshairs = self.actions.showCrosshairs.isChecked()
                 self.addLabel(new_shape)
                 self.breakAllRacksWithBeam(new_shape)
 
@@ -1881,15 +1887,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def breakAllRacks(self):
         for beam in self.beams:
-            broke_rack = True
-            while broke_rack:
-                broke_rack = False
-                racks = self.racks
-                for rack in racks:
-                    broke_rack, pos, orient = self.beamBreaksRack(beam, rack)
-                    if broke_rack:
-                        self.breakRack(pos, rack, orient)
-                        break
+            self.breakAllRacksWithBeam(beam)
 
     def isRackBigEnough(self, rack):
         bounds = np.array([self.qpointToPointcloud(rack.points[0]), self.qpointToPointcloud(rack.points[1])])
