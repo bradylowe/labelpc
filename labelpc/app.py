@@ -722,7 +722,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # This is simply to show the bar
         self.progressBar.setGeometry(30, 40, 200, 25)
-        self.progress.setMaximum(100)
+        self.progressBar.setMaximum(100)
         #self.progressBar.setValue(50)
 
         if output_file is not None and self._config['auto_save']:
@@ -1619,7 +1619,13 @@ class MainWindow(QtWidgets.QMainWindow):
         slices = VoxelGrid(points, (10000., 10000., self.thickness))
         self.offset = QtCore.QPointF(min_point[0], min_point[1])
         self.sliceIndices = []
+        self.status(self.tr('Building bitmaps from point cloud'))
+        sliceList = slices.all()
+        size = len(sliceList)
         for v in tqdm(slices.all(), desc='Building bitmaps from point cloud'):
+            index = sliceList.index(v)
+            percent = (index / size) * 100
+            self.progressBar.setValue(percent)
             if not len(slices.indices(v)):
                 continue
             self.sliceIndices.append(slices.indices(v))
@@ -1630,6 +1636,7 @@ class MainWindow(QtWidgets.QMainWindow):
             else:
                 cur_scores = None
             bitmaps.append(vg.bitmapFromSlice(max=255, scores=cur_scores, min_idx=min_idx, max_idx=max_idx))
+        self.progressBar.reset()
         self.imageData = []
         # Create images from numpy arrays
         for m in tqdm(bitmaps, desc='Building image data from bitmaps'):
