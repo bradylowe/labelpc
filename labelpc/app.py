@@ -16,7 +16,7 @@ from qtpy import QtCore
 from qtpy.QtCore import Qt
 from qtpy import QtGui
 from qtpy import QtWidgets
-from PyQt5.QtWidgets import QInputDialog, QDialog, QLineEdit, QDialogButtonBox, QFormLayout
+from PyQt5.QtWidgets import QInputDialog, QDialog, QLineEdit, QDialogButtonBox, QFormLayout, QProgressBar
 
 from labelpc import __appname__
 from labelpc import PY2
@@ -715,6 +715,15 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.statusBar().showMessage(self.tr('%s started.') % __appname__)
         self.statusBar().show()
+        self.progressBar = QProgressBar()
+
+
+        self.statusBar().addPermanentWidget(self.progressBar)
+
+        # This is simply to show the bar
+        self.progressBar.setGeometry(30, 40, 200, 25)
+        self.progress.setMaximum(100)
+        #self.progressBar.setValue(50)
 
         if output_file is not None and self._config['auto_save']:
             logger.warn(
