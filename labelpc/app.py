@@ -1028,10 +1028,7 @@ class MainWindow(QtWidgets.QMainWindow):
         shape.label = text
         shape.flags = flags
         shape.group_id = group_id
-        if shape.group_id is None:
-            item.setText(shape.label)
-        else:
-            item.setText('{} ({})'.format(shape.label, shape.group_id))
+        item.setText(shape.displayName)
         self.setDirty()
         if not self.uniqLabelList.findItemsByLabel(shape.label):
             item = QtWidgets.QListWidgetItem()
@@ -1103,10 +1100,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.highlightPointsInLabel(self.canvas.selectedShapes[0])
 
     def addLabel(self, shape):
-        if shape.group_id is None:
-            text = shape.label
-        else:
-            text = '{} ({})'.format(shape.label, shape.group_id)
+        text = shape.displayName
         item = QtWidgets.QListWidgetItem()
         item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
         item.setCheckState(Qt.Checked)
