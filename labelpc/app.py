@@ -1374,9 +1374,9 @@ class MainWindow(QtWidgets.QMainWindow):
             # Calculate the orientation of the rack, and resolve any collisions with other racks, walls, or noise
             # Calculate which rack group these racks belong to and generate a rack_id for each new rack
             elif 'rack' in text:
-                shape.orient = self.rackOrientation(shape)
                 shape.rack_id = self.nextRackId()
                 self.tightenRack(shape)
+                shape.orient = self.rackOrientation(shape)
                 #self.showRackHistogram(shape, axis='short')
                 #self.showRackHistogram(shape, axis='long')
                 if self.isTwoRacks(shape):
@@ -1424,13 +1424,14 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def rackOrientation(self, rack):
         # If rack is near canvas edge
-        if rack.points[0].x() - 2.0 / self.scale < 0.0:
+        center = (rack.points[0] + rack.points[1]) / 2.0
+        if center.x() - 4.0 / self.scale < 0.0:
             return 1
-        elif rack.points[0].y() + 2.0 / self.scale > self.canvas.height():
+        elif center.y() + 4.0 / self.scale > self.canvas.height():
             return 0
-        elif rack.points[1].x() + 2.0 / self.scale > self.canvas.width():
+        elif center.x() + 4.0 / self.scale > self.canvas.width():
             return 3
-        elif rack.points[1].y() - 2.0 / self.scale < 0.0:
+        elif center.y() - 4.0 / self.scale < 0.0:
             return 2
         box = np.array([self.qpointToPointcloud(rack.points[0]), self.qpointToPointcloud(rack.points[1])])
         walls = self.walls
@@ -1486,13 +1487,13 @@ class MainWindow(QtWidgets.QMainWindow):
         for other in self.racks:
             if rack.orient % 2 != other.orient % 2:
                 continue
-            center = np.array(self.qpointToPointcloud((other.points[0] + other.points[1]) / 2.0))
+            center = (other.points[0] + other.points[1]) / 2.0
             if rack.orient % 2:
-                offset = np.array((other.points[1].x() - other.points[0].x(), 0.0))
+                offset = QtCore.QPointF(other.points[1].x() - other.points[0].x(), 0.0)
             else:
-                offset = np.array((0.0, other.points[1].y() - other.points[0].y()))
-            if rack.containsPoint(self.pointcloudToQpoint(center + offset)) or \
-                rack.containsPoint(self.pointcloudToQpoint(center - offset)):
+                offset = QtCore.QPointF(0.0, other.points[1].y() - other.points[0].y())
+            if rack.containsPoint(center + offset) or rack.containsPoint(center - offset) or \
+                    rack.containsPoint(center + offset / 1.5) or rack.containsPoint(center - offset / 1.5):
                 return other.group_id
         return self.nextGroupId()
 
