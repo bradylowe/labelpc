@@ -749,8 +749,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.imageData = None
         self.sliceIndices = None
         self.pointcloud = PointCloud(render=False)
-        self.curGroup = 0
-        self.curRack = 0
+        self._cur_group = 0
+        self._cur_rack = 0
         self.zoom_values = {}  # key=filename, value=(zoom_mode, zoom_value)
         self.scroll_values = {
             Qt.Horizontal: {},
@@ -909,8 +909,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.imageData = None
         self.pointcloud.close_viewer()
         self.pointcloud = PointCloud(render=False)
-        self.curGroup = 0
-        self.curRack = 0
+        self._cur_group = 0
+        self._cur_rack = 0
         self.canvas.resetState()
         self.highlightSliceOnScroll = False
 
@@ -1194,6 +1194,10 @@ class MainWindow(QtWidgets.QMainWindow):
                 rack_id=rack_id,
                 orient=orient
             )
+            if shape.group_id is not None:
+                self._cur_group = max(self._cur_group, shape.group_id)
+            if shape.rack_id is not None:
+                self._cur_rack = max(self._cur_rack, shape.rack_id)
             for p in points:
                 shape.addPoint(self.pointcloudToQpoint(p))
             shape.close()
@@ -1473,12 +1477,12 @@ class MainWindow(QtWidgets.QMainWindow):
                 return 3
 
     def nextGroupId(self):
-        self.curGroup += 1
-        return self.curGroup - 1
+        self._cur_group += 1
+        return self._cur_group
 
     def nextRackId(self):
-        self.curRack += 1
-        return self.curRack - 1
+        self._cur_rack += 1
+        return self._cur_rack
 
     def calculateRackGroupId(self, rack):
         """
