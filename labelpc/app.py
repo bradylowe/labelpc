@@ -1377,17 +1377,15 @@ class MainWindow(QtWidgets.QMainWindow):
             # Calculate which rack group these racks belong to and generate a rack_id for each new rack
             elif 'rack' in text:
                 shape.orient = self.rackOrientation(shape)
-                shape.group_id = self.curGroup
-                self.curGroup += 1
-                shape.rack_id = self.curRack
-                self.curRack += 1
+                shape.rack_id = self.nextRackId()
                 self.tightenRack(shape)
                 #self.showRackHistogram(shape, axis='short')
                 #self.showRackHistogram(shape, axis='long')
                 if self.isTwoRacks(shape):
+                    shape.group_id = self.nextGroupId()
                     self.breakBackToBackRacks(shape)
                 else:
-                    self.tightenRack(shape)
+                    shape.group_id = self.calculateRackGroupId(shape)
                     self.normalizeRackDimensions(shape)
                     self.resolveRackRectIntersection(shape)
                     self.resolveRackRectIntersection(shape, noise=True)
@@ -1474,12 +1472,31 @@ class MainWindow(QtWidgets.QMainWindow):
             else:
                 return 3
 
-    def racksIntersect(self, rack, other):
-        xA = max(rack.points[0].x(), other.points[0].x())
-        yA = max(rack.points[0].y(), other.points[0].y())
-        xB = min(rack.points[1].x(), other.points[1].x())
-        yB = min(rack.points[1].y(), other.points[1].y())
-        return max(0, xB - xA + 1) * max(0, yB - yA + 1)
+    def nextGroupId(self):
+        self.curGroup += 1
+        return self.curGroup - 1
+
+    def nextRackId(self):
+        self.curRack += 1
+        return self.curRack - 1
+
+    def calculateRackGroupId(self, rack):
+        """
+        Loop over all the existing racks. If we find a rack that is right next to this rack, copy its group_id.
+        Otherwise, just return an unused group_id.
+        """
+        for other in self.racks:
+            if rack.orient % 2 != other.orient % 2:
+                continue
+            center = np.array(self.qpointToPointcloud((other.points[0] + other.points[1]) / 2.0))
+            if rack.orient % 2:
+                offset = np.array((other.points[1].x() - other.points[0].x(), 0.0))
+            else:
+                offset = np.array((0.0, other.points[1].y() - other.points[0].y()))
+            if rack.containsPoint(self.pointcloudToQpoint(center + offset)) or \
+                rack.containsPoint(self.pointcloudToQpoint(center - offset)):
+                return other.group_id
+        return self.nextGroupId()
 
     def scrollRequest(self, delta, orientation):
         units = - delta * 0.1  # natural scroll
@@ -1574,12 +1591,6 @@ class MainWindow(QtWidgets.QMainWindow):
         labelfile = filename
         if filename.endswith('.json'):
             filename = LabelFile.get_source(filename)
-        # changing fileListWidget loads file
-        if filename in self.imageList and self.fileListWidget.currentRow() != self.imageList.index(filename):
-            self.fileListWidget.setCurrentRow(self.imageList.index(filename))
-            self.fileListWidget.repaint()
-            return
-
         self.canvas.setEnabled(False)
         self.resetState()
 
@@ -1898,8 +1909,7 @@ class MainWindow(QtWidgets.QMainWindow):
         Delete any rack that is not large enough to fit a pallet.
         """
         new_rack = rack.copy()
-        new_rack.rack_id = self.curRack
-        self.curRack += 1
+        new_rack.rack_id = self.nextRackId()
         if orientation is None:
             orientation = rack.orient
         if orientation % 2 == 0:
