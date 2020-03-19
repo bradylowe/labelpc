@@ -1374,6 +1374,7 @@ class MainWindow(QtWidgets.QMainWindow):
                         shape.points[i] = self.pointcloudToQpoint(snapped)
             # If this is a new rack, split the rack into two racks if necessary and tighten box(es) to rack
             # Calculate the orientation of the rack, and resolve any collisions with other racks, walls, or noise
+            # Calculate which rack group these racks belong to and generate a rack_id for each new rack
             elif 'rack' in text:
                 shape.orient = self.rackOrientation(shape)
                 shape.group_id = self.curGroup
@@ -1524,6 +1525,9 @@ class MainWindow(QtWidgets.QMainWindow):
             )
 
     def highlightSlice(self):
+        """
+        If the 3D viewer is active, highlight all the points that are in the current slice shown in annotation GUI.
+        """
         if not self.pointcloud.viewer_is_ready():
             self.toggleActions(viewer=False)
             return
@@ -1562,6 +1566,11 @@ class MainWindow(QtWidgets.QMainWindow):
         #item.setCheckState(Qt.Checked if item.checkState() == Qt.Unchecked else Qt.Unchecked)
 
     def loadFile(self, filename):
+        """
+        Clear all information from last open file. Ask the user how many points to load and what mesh size and slice
+        thickness. Load the point cloud data and build slice images from it. If there are existing annotations,
+        load them.
+        """
         labelfile = filename
         if filename.endswith('.json'):
             filename = LabelFile.get_source(filename)
@@ -1573,6 +1582,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.canvas.setEnabled(False)
         self.resetState()
+
         self.sourcePath = filename
         dialog = OpenFileDialog()
         if dialog.exec():
@@ -1621,12 +1631,14 @@ class MainWindow(QtWidgets.QMainWindow):
         self.status(self.tr("Loaded %s") % osp.basename(filename))
 
     def buildImageData(self, scores=None):
-        bitmaps = []
+        # Divide the point cloud into horizontal slices with some thickness
         points = self.pointcloud.points[['x', 'y', 'z']].values
         min_point, max_point = points.min(axis=0), points.max(axis=0)
         min_idx, max_idx = (min_point / self.scale).astype(int), (max_point / self.scale).astype(int)
         slices = VoxelGrid(points, (10000., 10000., self.thickness))
         self.offset = QtCore.QPointF(min_point[0], min_point[1])
+        # Create bitmaps (2D rectangular integer arrays) from the slices
+        bitmaps = []
         self.sliceIndices = []
         for v in tqdm(slices.all(), desc='Building bitmaps from point cloud'):
             if not len(slices.indices(v)):
@@ -1639,8 +1651,8 @@ class MainWindow(QtWidgets.QMainWindow):
             else:
                 cur_scores = None
             bitmaps.append(vg.bitmapFromSlice(max=255, scores=cur_scores, min_idx=min_idx, max_idx=max_idx))
-        self.imageData = []
         # Create images from numpy arrays
+        self.imageData = []
         for m in tqdm(bitmaps, desc='Building image data from bitmaps'):
             img = PIL.Image.fromarray(np.asarray(m, dtype="uint8"))
             buff = BytesIO()
@@ -1759,8 +1771,11 @@ class MainWindow(QtWidgets.QMainWindow):
         # self.settings.setValue('window/geometry', self.saveGeometry())
 
     def pointsInShape(self, shape):
+        """
+        Return a boolean mask indicating which points from the pointcloud are contained in the given annotation.
+        """
         if shape.label == 'beam' or shape.label == 'pole':
-            keep = self.pointcloud.get_points_within(0.1, self.qpointToPointcloud(shape.points[0]), return_mask=True)
+            keep = self.pointcloud.get_points_within(0.2, self.qpointToPointcloud(shape.points[0]), return_mask=True)
         elif shape.label == 'rectangle':
             box = [self.qpointToPointcloud(shape.points[0]), self.qpointToPointcloud(shape.points[1])]
             keep = self.pointcloud.in_box_2d(box)
@@ -1772,6 +1787,11 @@ class MainWindow(QtWidgets.QMainWindow):
         return keep
 
     def nearestCrosshairIntersection(self, point, threshold=0.5):
+        """
+        Check to see if there is an intersection of beam crosshairs near the given point. If there are no crosshair
+        lines nearby, return False along with the original point location. If there is a horizontal and/or vertical
+        beam crosshair line nearby, return True with the coordinates of the nearby lines.
+        """
         beams = []
         for item, shape in self.labelList.itemsToShapes:
             if shape.label == 'beam':
@@ -1797,6 +1817,10 @@ class MainWindow(QtWidgets.QMainWindow):
         self.updatePixmap()
 
     def interpolateBeamPositions(self):
+        """
+        Look at the existing beam positions and predict the location of all beam positions that we can predict based
+        on the given information (within the canvas and walls). From these predictions, generate new annotations.
+        """
         x, y = [], []
         beams = self.beams
         if not beams:
@@ -1817,6 +1841,9 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.breakAllRacksWithBeam(new_shape)
 
     def unbreakRack(self):
+        """
+        Merge the selected racks into a single rack that spans the space of all the racks combined.
+        """
         racks = []
         for item in self.labelList.selectedItems():
             shape = self.labelList.get_shape_from_item(item)
@@ -1834,6 +1861,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.updatePixmap()
 
     def breakRackManual(self, pos):
+        """
+        Break a rack using the mouse. [CTRL + right mouse button]
+        """
         for item, shape in self.labelList.itemsToShapes:
             if 'rack' in shape.label and shape.containsPoint(pos):
                 rack = shape
@@ -1850,6 +1880,9 @@ class MainWindow(QtWidgets.QMainWindow):
             self.updatePixmap()
 
     def breakAllRacksWithBeam(self, beam):
+        """
+        Given a beam, loop over all existing racks and break each one that is close enough to this beam.
+        """
         for rack in self.racks:
             breaks, pos, orient = self.beamBreaksRack(beam, rack)
             if breaks:
@@ -1857,7 +1890,13 @@ class MainWindow(QtWidgets.QMainWindow):
         self.setDirty()
         self.updatePixmap()
 
-    def breakRack(self, pos, rack, orientation=None, tighten=False, orient=False, normalize=True):
+    def breakRack(self, pos, rack, orientation=None, tighten=False, normalize=True):
+        """
+        Turn one rack into two racks at the given position. If an orientation is not chosen, then assume we are
+        breaking a long rack into two shorter racks. Optionally tighten the resulting annotations around the points.
+        Optionally resize the new racks to fit integer number of pallet locations.
+        Delete any rack that is not large enough to fit a pallet.
+        """
         new_rack = rack.copy()
         new_rack.rack_id = self.curRack
         self.curRack += 1
@@ -1871,8 +1910,8 @@ class MainWindow(QtWidgets.QMainWindow):
             new_rack.points[0].setY(pos + 0.2)
         if self.isRackBigEnough(new_rack):
             self.addLabel(new_rack)
-        self.finalizeRack(rack, tighten=tighten, orient=orient, normalize=normalize)
-        self.finalizeRack(new_rack, tighten=tighten, orient=orient, normalize=normalize)
+        self.finalizeRack(rack, tighten=tighten, normalize=normalize)
+        self.finalizeRack(new_rack, tighten=tighten, normalize=normalize)
         return new_rack
 
     def finalizeRack(self, rack, tighten=False, orient=False, normalize=True):
@@ -1999,21 +2038,26 @@ class MainWindow(QtWidgets.QMainWindow):
         return pallets
 
     def isTwoRacks(self, rack):
+        """
+        Return True if the given rack annotation is actually large enough to be two back-to-back racks.
+        """
         bounds = np.array([self.qpointToPointcloud(rack.points[0]), self.qpointToPointcloud(rack.points[1])])
         dims = np.abs(bounds[1] - bounds[0])
         return (dims / 1.9 > self._config[rack.label][1] * self._config[rack.label][2]).all()
 
     def breakBackToBackRacks(self, rack):
+        """
+        Break a single rack into two back-to-back racks.
+        """
         bounds = np.array([self.qpointToPointcloud(rack.points[0]), self.qpointToPointcloud(rack.points[1])])
         dims = np.abs(bounds[1] - bounds[0])
         depth = self._config[rack.label][1] * self._config[rack.label][2]
         if abs(dims[0] - depth * 2.0) < abs(dims[1] - depth * 2.0):
             middle = (rack.points[0].x() + rack.points[1].x()) / 2.0
-            new_rack = self.breakRack(middle, rack, 0, tighten=True, orient=True)
+            new_rack = self.breakRack(middle, rack, 0, tighten=True)
         else:
             middle = (rack.points[0].y() + rack.points[1].y()) / 2.0
-            new_rack = self.breakRack(middle, rack, 1, tighten=True, orient=True)
-        rack.orient = self.rackOrientation(rack)
+            new_rack = self.breakRack(middle, rack, 1, tighten=True)
         return new_rack
 
     def rotateShapes(self, angle):
