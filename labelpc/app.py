@@ -196,6 +196,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.canvas.drawingPolygon.connect(self.toggleDrawingSensitive)
         self.canvas.breakRack.connect(self.breakRackManual)
         self.canvas.rackChanged.connect(self.finalizeRack)
+        self.canvas.beamChanged.connect(self.finalizeBeam)
 
         self.setCentralWidget(scrollArea)
 
@@ -1360,20 +1361,7 @@ class MainWindow(QtWidgets.QMainWindow):
             shape.group_id = group_id
             # If this is a new pole or beam, snap the annotation to the center of the object
             if text == 'beam':
-                # Snap beam to beam intersection or to nearest beam
-                intersection, intersected = self.nearestCrosshairIntersection(shape.points[0])
-                if intersected:
-                    shape.points[0] = intersection
-                else:
-                    transformed = self.qpointToPointcloud(shape.points[0])
-                    snapped = self.pointcloud.snap_to_center(transformed, self._config['snap_center_thresh'])
-                    if not np.any(np.isnan(snapped)):
-                        shape.points[0] = self.pointcloudToQpoint(snapped)
-                # Check for racks that this beam breaks and break them
-                self.breakAllRacksWithBeam(shape)
-                # Set up beam crosshairs
-                self.canvas.getEdges(shape)
-                shape.crosshairs = self.actions.showCrosshairs.isChecked()
+                self.finalizeBeam(shape)
             elif text == 'pole':
                 transformed = self.qpointToPointcloud(shape.points[0])
                 snapped = self.pointcloud.snap_to_center(transformed, self._config['snap_center_thresh'])
@@ -1868,10 +1856,8 @@ class MainWindow(QtWidgets.QMainWindow):
                 new_shape = Shape(label='beam', shape_type='point')
                 new_shape.addPoint(QtCore.QPointF(cur_x, cur_y))
                 new_shape.close()
-                self.canvas.getEdges(new_shape)
-                new_shape.crosshairs = self.actions.showCrosshairs.isChecked()
+                self.finalizeBeam(new_shape, snapToGrid=False, snapToPoints=False)
                 self.addLabel(new_shape)
-                self.breakAllRacksWithBeam(new_shape)
 
     def unbreakRack(self):
         """
@@ -1955,6 +1941,22 @@ class MainWindow(QtWidgets.QMainWindow):
             self.normalizeRackDimensions(rack)
         if not self.isRackBigEnough(rack):
             self.remLabels([rack])
+
+    def finalizeBeam(self, beam, snapToGrid=True, snapToPoints=True, breakRack=True):
+        snapped = False
+        if snapToGrid:
+            intersection, snapped = self.nearestCrosshairIntersection(beam.points[0])
+            if snapped:
+                beam.points[0] = intersection
+        if snapToPoints and not snapped:
+            transformed = self.qpointToPointcloud(beam.points[0])
+            snapped = self.pointcloud.snap_to_center(transformed, self._config['snap_center_thresh'])
+            if not np.any(np.isnan(snapped)):
+                beam.points[0] = self.pointcloudToQpoint(snapped)
+        if breakRack:
+            self.breakAllRacksWithBeam(beam)
+        self.canvas.getEdges(beam)
+        beam.crosshairs = self.actions.showCrosshairs.isChecked()
 
     def breakAllRacks(self):
         for beam in self.beams:

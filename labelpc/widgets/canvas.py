@@ -32,6 +32,7 @@ class Canvas(QtWidgets.QWidget):
     edgeSelected = QtCore.Signal(bool, object)
     vertexSelected = QtCore.Signal(bool)
     rackChanged = QtCore.Signal(Shape)
+    beamChanged = QtCore.Signal(Shape)
 
     CREATE, EDIT = 0, 1
 
@@ -378,8 +379,11 @@ class Canvas(QtWidgets.QWidget):
                 self.repaint()
         elif ev.button() == QtCore.Qt.LeftButton and self.selectedShapes:
             self.overrideCursor(CURSOR_GRAB)
-        elif ev.button() == QtCore.Qt.LeftButton and self.selectedVertex() and 'rack' in self.hShape.label:
-            self.rackChanged.emit(self.hShape)
+        elif ev.button() == QtCore.Qt.LeftButton and self.selectedVertex():
+            if 'rack' in self.hShape.label:
+                self.rackChanged.emit(self.hShape)
+            elif self.hShape.label == 'beam':
+                self.beamChanged.emit(self.hShape)
 
         if self.movingShape and self.hShape:
             index = self.shapes.index(self.hShape)
