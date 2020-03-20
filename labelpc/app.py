@@ -48,10 +48,9 @@ from labelpc.pointcloud.Voxelize import VoxelGrid
 #   Snap to center
 #   --- Brady:
 #   Create annotations for individual slices ??? (floor, lights, evap. coils)
-#   Make rack dimensions fit integer number of pallet locations
 #   Interpolate beam positions inside wall bounds or canvas bounds
 #   Make different shapes for i-beam and square beam
-#   Check beam breaking both back to back racks
+#   Fix issues with selecting row and column of beams
 #   --- Austin:
 #   //DONE Add distance threshold for snap functions to config file (snapToCenter, snapToCorner, rackSep, rackSplit)
 #   Toggle on/off beams, racks, pallets, walls in view (checkbox for each group)
@@ -2012,6 +2011,7 @@ class MainWindow(QtWidgets.QMainWindow):
         total_dims = box[1] - box[0]
         discrete_dims = (total_dims / unit_dims).astype(int)
         discrete_dims += total_dims / unit_dims - discrete_dims > 0.6
+        discrete_dims[1-orient] = min(discrete_dims[1-orient], self._config[rack.label][2])
         box[1] = box[0] + unit_dims * discrete_dims
         rack.points[0], rack.points[1] = self.pointcloudToQpoint(box[0]), self.pointcloudToQpoint(box[1])
 

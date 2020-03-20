@@ -526,7 +526,7 @@ class PointCloud:
 
     def in_box_2d(self, box, points=None):
         if points is None:
-            points = self.points.loc[self.showing.bools][['x', 'y']].values
+            points = self.points[['x', 'y']].values
         keep = points > np.array(np.min(box, axis=0))
         keep[points > np.array(np.max(box, axis=0))] = False
         return keep.all(axis=1)
