@@ -16,7 +16,7 @@ from qtpy import QtCore
 from qtpy.QtCore import Qt
 from qtpy import QtGui
 from qtpy import QtWidgets
-from PyQt5.QtWidgets import QInputDialog, QDialog, QLineEdit, QDialogButtonBox, QFormLayout
+from PyQt5.QtWidgets import QInputDialog, QDialog, QLineEdit, QDialogButtonBox, QFormLayout, QProgressBar
 
 from labelpc import __appname__
 from labelpc import PY2
@@ -723,6 +723,15 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.statusBar().showMessage(self.tr('%s started.') % __appname__)
         self.statusBar().show()
+        self.progressBar = QProgressBar()
+
+
+        self.statusBar().addPermanentWidget(self.progressBar)
+
+        # This is simply to show the bar
+        self.progressBar.setGeometry(30, 40, 200, 25)
+        self.progressBar.setMaximum(100)
+        #self.progressBar.setValue(50)
 
         if output_file is not None and self._config['auto_save']:
             logger.warn(
@@ -1650,7 +1659,13 @@ class MainWindow(QtWidgets.QMainWindow):
         # Create bitmaps (2D rectangular integer arrays) from the slices
         bitmaps = []
         self.sliceIndices = []
+        self.status(self.tr('Building bitmaps from point cloud'))
+        sliceList = slices.all()
+        size = len(sliceList)
         for v in tqdm(slices.all(), desc='Building bitmaps from point cloud'):
+            index = sliceList.index(v)
+            percent = (index / size) * 100
+            self.progressBar.setValue(percent)
             if not len(slices.indices(v)):
                 continue
             self.sliceIndices.append(slices.indices(v))
@@ -1663,6 +1678,7 @@ class MainWindow(QtWidgets.QMainWindow):
             bitmaps.append(vg.bitmapFromSlice(max=255, scores=cur_scores, min_idx=min_idx, max_idx=max_idx))
         # Create images from numpy arrays
         self.imageData = []
+        self.progressBar.reset()
         for m in tqdm(bitmaps, desc='Building image data from bitmaps'):
             img = PIL.Image.fromarray(np.asarray(m, dtype="uint8"))
             buff = BytesIO()
