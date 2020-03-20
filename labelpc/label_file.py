@@ -54,7 +54,9 @@ class LabelFile(object):
                     points=s['points'],
                     shape_type=s.get('shape_type', 'polygon'),
                     flags=s.get('flags', {}),
-                    group_id=s.get('group_id')
+                    group_id=s.get('group_id'),
+                    rack_id=s.get('rack_id'),
+                    orient=s.get('orient')
                 )
                 for s in data['shapes']
             ]
@@ -104,3 +106,16 @@ class LabelFile(object):
     @staticmethod
     def is_label_file(filename):
         return osp.splitext(filename)[1].lower() == LabelFile.suffix
+
+    @staticmethod
+    def get_source(filename):
+        try:
+            with open(filename) as f:
+                data = json.load(f)
+            sourcePath = data['sourcePath']
+            if sourcePath:
+                return sourcePath
+            else:
+                return filename
+        except Exception as e:
+            return filename.replace('.json', '.las')

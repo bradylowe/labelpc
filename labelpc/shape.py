@@ -285,6 +285,17 @@ class Shape(object):
     def copy(self):
         return copy.deepcopy(self)
 
+    @property
+    def displayName(self):
+        name = self.label
+        if self.group_id is not None:
+            name += " (%d)" % self.group_id
+        if self.rack_id is not None:
+            name += " (%d)" % self.rack_id
+        if self.orient is not None:
+            name += " (%d)" % self.orient
+        return name
+
     def __len__(self):
         return len(self.points)
 
