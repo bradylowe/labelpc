@@ -1687,7 +1687,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 )
                 self.status(self.tr("Error reading %s") % label_file)
                 return False
-            self.otherData = self.labelFile.otherData
+            self.otherDat.a = self.labelFile.otherData
         else:
             self.labelFile = None
 
@@ -1804,6 +1804,24 @@ class MainWindow(QtWidgets.QMainWindow):
             y.append(beam.points[0].y())
         self.remLabels(beams)
         x, y = np.unique(x, axis=0), np.unique(y, axis=0)
+        dist_x = x[1] - x[0]
+        dist_y = y[1] - y[0]
+        # temp_x = x[0]
+        # temp_y = y[0]
+        # test_x, test_y = [], []
+        # while temp_x < self.canvas.pixmap.width():
+        #     temp_x += dist_x
+        #     test_x.append(temp_x)
+        # while temp_y < self.canvas.pixmap.height():
+        #     temp_y += dist_y
+        #     test_y.append(temp_y)
+        # for cur_x in test_x:
+        #     for cur_y in test_y:
+        #         new_shape = Shape(label='beam', shape_type='point')
+        #         new_shape.addPoint(QtCore.QPointF(cur_x, cur_y))
+        #         new_shape.close()
+        #         self.addLabel(new_shape)
+        #         self.breakAllRacksWithBeam(new_shape)
         for cur_x in x:
             for cur_y in y:
                 new_shape = Shape(label='beam', shape_type='point')
