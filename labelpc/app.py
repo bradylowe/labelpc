@@ -335,6 +335,12 @@ class MainWindow(QtWidgets.QMainWindow):
 
         select_beams = action('Select beams', self.selectBeams, None, 'select beams', 'Select all beams')
 
+        select_beam_row = action('Select beam row', self.selectBeamRow, None, 'select beam row',
+                                 'Select all the beams in the selected row')
+
+        select_beam_column = action('Select beam column', self.selectBeamColumn, None, 'select beam column',
+                                 'Select all the beams in the selected column')
+
         select_pallets = action('Select pallets', self.selectPallets, None, 'select pallets', 'Select all pallets')
 
         interpolate_beams = action('Interp beams', self.interpolateBeamPositions, None, 'interpolate beams',
@@ -555,6 +561,8 @@ class MainWindow(QtWidgets.QMainWindow):
             predictPallets=predict_pallets,
             selectPalletsByRack=select_pallets_by_rack,
             selectPalletsByGroup=select_pallets_by_group,
+            selectBeamColumn=select_beam_column,
+            selectBeamRow=select_beam_row,
             interpolateBeams=interpolate_beams,
             userTightenRack=user_tighten_rack,
             #fileMenuActions=(open_, opendir, save, saveAs, close, quit),
@@ -593,7 +601,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 None,
                 select_pallets_by_rack,
                 select_pallets_by_group,
-                select_beams,
+                select_beams, select_beam_column, select_beam_row,
                 select_pallets,
                 user_tighten_rack,
             ),
@@ -1356,7 +1364,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 # Snap beam to beam intersection or to nearest beam
                 intersection, intersected = self.nearestCrosshairIntersection(shape.points[0])
                 if intersected:
-                    shape.points[0] = self.pointcloudToQpoint(intersection)
+                    shape.points[0] = intersection
                 else:
                     transformed = self.qpointToPointcloud(shape.points[0])
                     snapped = self.pointcloud.snap_to_center(transformed, self._config['snap_center_thresh'])
@@ -1821,16 +1829,16 @@ class MainWindow(QtWidgets.QMainWindow):
         beams = []
         for item, shape in self.labelList.itemsToShapes:
             if shape.label == 'beam':
-                beams.append(self.qpointToPointcloud(shape.points[0]))
-        px, py = self.qpointToPointcloud(point)
-        intersection = np.array((px, py))
+                beams.append((shape.points[0].x(), shape.points[0].y()))
+        px, py = point.x(), point.y()
+        intersection = QtCore.QPointF(px, py)
         intersected = False
         for x, y in beams:
             if abs(x - px) < threshold:
-                intersection[0] = x
+                intersection.setX(x)
                 intersected = True
             if abs(y - py) < threshold:
-                intersection[1] = y
+                intersection.setY(y)
                 intersected = True
         return intersection, intersected
 
@@ -2546,6 +2554,26 @@ class MainWindow(QtWidgets.QMainWindow):
     def selectBeams(self):
         for item, shape in self.labelList.itemsToShapes:
             if shape.label == 'beam':
+                item.setSelected(True)
+            else:
+                item.setSelected(False)
+
+    def selectBeamColumn(self):
+        intersection, intersected = self.nearestCrosshairIntersection(self.canvas.prevPoint, 1.0)
+        if not intersected:
+            return
+        for item, shape in self.labelList.itemsToShapes:
+            if shape.label == 'beam' and shape.points[0].x() == intersection.x():
+                item.setSelected(True)
+            else:
+                item.setSelected(False)
+
+    def selectBeamRow(self):
+        intersection, intersected = self.nearestCrosshairIntersection(self.canvas.prevPoint, 1.0)
+        if not intersected:
+            return
+        for item, shape in self.labelList.itemsToShapes:
+            if shape.label == 'beam' and shape.points[0].y() == intersection.y():
                 item.setSelected(True)
             else:
                 item.setSelected(False)
