@@ -167,6 +167,8 @@ class Shape(object):
             painter.drawPath(vrtx_path)
             painter.fillPath(vrtx_path, self._vertex_fill_color)
             if self.crosshairs:
+                r, g, b = self.line_color.red(), self.line_color.green(), self.line_color.blue()
+                self.line_color = QtGui.QColor(r, g, b, 20)
                 for line in self.lines:
                     painter.drawLine(line)
             if self.fill:

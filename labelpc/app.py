@@ -1212,6 +1212,8 @@ class MainWindow(QtWidgets.QMainWindow):
             for p in points:
                 shape.addPoint(self.pointcloudToQpoint(p))
             shape.close()
+            if shape.label == 'beam':
+                shape.lines = self.canvas.getEdges(shape)
 
             default_flags = {}
             if self._config['label_flags']:
@@ -1955,7 +1957,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 beam.points[0] = self.pointcloudToQpoint(snapped)
         if breakRack:
             self.breakAllRacksWithBeam(beam)
-        self.canvas.getEdges(beam)
+        beam.lines = self.canvas.getEdges(beam)
         beam.crosshairs = self.actions.showCrosshairs.isChecked()
 
     def breakAllRacks(self):

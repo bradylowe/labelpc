@@ -309,10 +309,7 @@ class Canvas(QtWidgets.QWidget):
         x2 = QtCore.QPoint(w, y)
         y1 = QtCore.QPoint(x, 0)
         y2 = QtCore.QPoint(x, h)
-        linex = QtCore.QLine(x1, x2)
-        liney = QtCore.QLine(y1, y2)
-        shape.lines.append(linex)
-        shape.lines.append(liney)
+        return [QtCore.QLine(x1, x2), QtCore.QLine(y1, y2)]
 
     def mousePressEvent(self, ev):
         if QT5:
