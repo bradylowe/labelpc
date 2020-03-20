@@ -1968,8 +1968,14 @@ class MainWindow(QtWidgets.QMainWindow):
             self.remLabels([rack])
 
     def breakAllRacks(self):
+        size = len(self.beams)
+        self.status(self.tr('Breaking all racks'))
         for beam in self.beams:
+            index = self.beams.index(beam)
+            percent = (index / size) * 100
+            self.progressBar.setValue(percent)
             self.breakAllRacksWithBeam(beam)
+        self.progressBar.reset()
 
     def isRackBigEnough(self, rack):
         bounds = np.array([self.qpointToPointcloud(rack.points[0]), self.qpointToPointcloud(rack.points[1])])
@@ -2010,9 +2016,15 @@ class MainWindow(QtWidgets.QMainWindow):
             self.finalizeRack(rack, tighten=True)
 
     def predictPalletsForAllRacks(self):
+        size = len(self.racks)
+        self.status(self.tr('Predicting pallets for all racks'))
         for rack in self.racks:
+            index = self.racks.index(rack)
+            percent = (index / size) * 100
+            self.progressBar.setValue(percent)
             self.predictPalletsFromRack(rack)
         self.setDirty()
+        self.progressBar.reset()
         self.updatePixmap()
 
     def normalizeRackDimensions(self, rack):
