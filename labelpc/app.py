@@ -1691,7 +1691,7 @@ class MainWindow(QtWidgets.QMainWindow):
         else:
             self.toggleActions(viewer=False)
 
-    def updatePixmap(self):
+    def updatePixmap(self, store=True):
         if not self.imageData:
             return
         if self.sliceIdx >= len(self.imageData):
@@ -1700,7 +1700,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.sliceIdx = len(self.imageData) - 1
         self.image = QtGui.QImage.fromData(self.imageData[self.sliceIdx])
         self.canvas.loadPixmap(QtGui.QPixmap.fromImage(self.image))
-        self.canvas.loadShapes(self.labelList.shapes)
+        self.canvas.loadShapes(self.labelList.shapes, store=store)
         if self.highlightSliceOnScroll:
             self.highlightSlice()
 
@@ -2151,11 +2151,11 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def showNextSlice(self, _value=False):
         self.sliceIdx += 1
-        self.updatePixmap()
+        self.updatePixmap(store=False)
 
     def showLastSlice(self, _value=False):
         self.sliceIdx -= 1
-        self.updatePixmap()
+        self.updatePixmap(store=False)
 
     def openFile(self, _value=False):
         if not self.mayContinue():

@@ -745,12 +745,13 @@ class Canvas(QtWidgets.QWidget):
         self.shapes = []
         self.repaint()
 
-    def loadShapes(self, shapes, replace=True):
+    def loadShapes(self, shapes, replace=True, store=True):
         if replace:
             self.shapes = list(shapes)
         else:
             self.shapes.extend(shapes)
-        self.storeShapes()
+        if store:
+            self.storeShapes()
         self.current = None
         self.hShape = None
         self.hVertex = None
