@@ -1729,7 +1729,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 )
                 self.status(self.tr("Error reading %s") % label_file)
                 return False
-            self.otherData = self.labelFile.otherData
+            self.otherDat.a = self.labelFile.otherData
         else:
             self.labelFile = None
 
@@ -1858,6 +1858,24 @@ class MainWindow(QtWidgets.QMainWindow):
             y.append(beam.points[0].y())
         self.remLabels(beams)
         x, y = np.unique(x, axis=0), np.unique(y, axis=0)
+        dist_x = x[1] - x[0]
+        dist_y = y[1] - y[0]
+        # temp_x = x[0]
+        # temp_y = y[0]
+        # test_x, test_y = [], []
+        # while temp_x < self.canvas.pixmap.width():
+        #     temp_x += dist_x
+        #     test_x.append(temp_x)
+        # while temp_y < self.canvas.pixmap.height():
+        #     temp_y += dist_y
+        #     test_y.append(temp_y)
+        # for cur_x in test_x:
+        #     for cur_y in test_y:
+        #         new_shape = Shape(label='beam', shape_type='point')
+        #         new_shape.addPoint(QtCore.QPointF(cur_x, cur_y))
+        #         new_shape.close()
+        #         self.addLabel(new_shape)
+        #         self.breakAllRacksWithBeam(new_shape)
         for cur_x in x:
             for cur_y in y:
                 new_shape = Shape(label='beam', shape_type='point')
@@ -1966,8 +1984,14 @@ class MainWindow(QtWidgets.QMainWindow):
         beam.crosshairs = self.actions.showCrosshairs.isChecked()
 
     def breakAllRacks(self):
+        size = len(self.beams)
+        self.status(self.tr('Breaking all racks'))
         for beam in self.beams:
+            index = self.beams.index(beam)
+            percent = (index / size) * 100
+            self.progressBar.setValue(percent)
             self.breakAllRacksWithBeam(beam)
+        self.progressBar.reset()
 
     def isRackBigEnough(self, rack):
         bounds = np.array([self.qpointToPointcloud(rack.points[0]), self.qpointToPointcloud(rack.points[1])])
@@ -2008,9 +2032,15 @@ class MainWindow(QtWidgets.QMainWindow):
             self.finalizeRack(rack, tighten=True)
 
     def predictPalletsForAllRacks(self):
+        size = len(self.racks)
+        self.status(self.tr('Predicting pallets for all racks'))
         for rack in self.racks:
+            index = self.racks.index(rack)
+            percent = (index / size) * 100
+            self.progressBar.setValue(percent)
             self.predictPalletsFromRack(rack)
         self.setDirty()
+        self.progressBar.reset()
         self.updatePixmap()
 
     def normalizeRackDimensions(self, rack):
