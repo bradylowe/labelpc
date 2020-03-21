@@ -349,6 +349,9 @@ class MainWindow(QtWidgets.QMainWindow):
         user_tighten_rack = action('Tighten rack', self.userTightenRack, None, 'tighten rack',
                                    'Tighten the selected rack around the points in the point cloud')
 
+        annotate_3d_beam = action('Annotate 3D beam', self.annotate3dBeam, None, 'annotate 3d beam',
+                                  'Use the points highlighted in the 3D viewer to create beam annotation')
+
         toggle_keep_prev_mode = action(
             self.tr('Keep Previous Annotation'),
             self.toggleKeepPrevMode,
@@ -565,6 +568,7 @@ class MainWindow(QtWidgets.QMainWindow):
             selectBeamRow=select_beam_row,
             interpolateBeams=interpolate_beams,
             userTightenRack=user_tighten_rack,
+            annotate3dbeam=annotate_3d_beam,
             #fileMenuActions=(open_, opendir, save, saveAs, close, quit),
             fileMenuActions=(open_, save, saveAs, close, quit),
             tool=(),
@@ -727,6 +731,7 @@ class MainWindow(QtWidgets.QMainWindow):
             select_pallets_by_group,
             select_pallets_by_rack,
             interpolate_beams,
+            annotate_3d_beam,
         )
 
         self.statusBar().showMessage(self.tr('%s started.') % __appname__)
@@ -2515,6 +2520,10 @@ class MainWindow(QtWidgets.QMainWindow):
         return images
 
     def showRackHistogram(self, rack, axis='short'):
+        """
+        Display a histogram of the density of points of a given rack along the given axis. If axis is 'both', then
+        display a 2D histogram of the rack.
+        """
         import matplotlib.pyplot as plt
         box = [self.qpointToPointcloud(rack.points[0]), self.qpointToPointcloud(rack.points[1])]
         inbox = self.pointcloud.in_box_2d(box)
@@ -2590,6 +2599,10 @@ class MainWindow(QtWidgets.QMainWindow):
                 item.setSelected(False)
 
     def resolveRackRectIntersection(self, rack, noise=False):
+        """
+        Find out where the given rack rectangle intersects with another rack (or noise) rectangle, figure out which
+        dimension to crop, and crop it in order to resolve the intersection.
+        """
         if noise:
             rectangles = self.noise
         else:
@@ -2610,6 +2623,10 @@ class MainWindow(QtWidgets.QMainWindow):
                     rack.points[1].setX(rack.points[1].x() - overlap_x)
 
     def resolveRackWallIntersection(self, rack):
+        """
+        Find out where the given rack is intersecting a wall, calculate which direction the rack needs to be cropped
+        in order to keep all the rack inside the walls, and perform the crop.
+        """
         walls = self.walls
         if not walls:
             return
@@ -2646,3 +2663,20 @@ class MainWindow(QtWidgets.QMainWindow):
                     elif (j == 1 and p3_inside) or (j == 3 and not p3_inside):
                         rack.points[1].setX(intersection.x())
 
+    def annotate3dBeam(self):
+        """
+        Create a new beam annotation based on the currently highlighted points in the 3D viewer.
+        """
+        if self.pointcloud.viewer_is_ready():
+            highlighted = self.pointcloud.get_highlighted_mask()
+            if not highlighted.count():
+                return
+            points = self.pointcloud.points.loc[highlighted.bools][['x', 'y']].values
+            min_p, max_p = points.min(axis=0), points.max(axis=0)
+            center = (min_p + max_p) / 2.0
+            beam = Shape('beam', shape_type='point')
+            beam.addPoint(self.pointcloudToQpoint(center))
+            beam.close()
+            self.finalizeBeam(beam, snapToPoints=False)
+            self.addLabel(beam)
+            self.updatePixmap()
