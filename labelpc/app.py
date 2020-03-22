@@ -50,10 +50,8 @@ from labelpc.pointcloud.Voxelize import VoxelGrid
 #   Create annotations for individual slices ??? (floor, lights, evap. coils)
 #   Interpolate beam positions inside wall bounds or canvas bounds
 #   Make different shapes for i-beam and square beam
-#   Fix issues with selecting row and column of beams
 #   --- Austin:
 #   //DONE Add distance threshold for snap functions to config file (snapToCenter, snapToCorner, rackSep, rackSplit)
-#   Toggle on/off beams, racks, pallets, walls in view (checkbox for each group)
 #   //DONE Draw crosshairs on beams that span the canvas (toggle on/off)
 #   Interpolate beam positions inside wall bounds or canvas bounds
 #   Color one side of rectangle a different color based on group ID
@@ -310,46 +308,50 @@ class MainWindow(QtWidgets.QMainWindow):
         update_annotation = action('Update Label', self.updateSelectedLabelWithHighlightedPoints, None, 'update label',
                                    'Update the label based on the points currently highlighted in the 3d viewer')
 
-        break_all_racks = action('Break All Racks', self.breakAllRacks, None, 'break racks near beams',
+        break_all_racks = action('Break All Racks', self.breakAllRacks, None, None,
                                  'Break the racks that are broken up due to proximity to support beams')
 
-        merge_racks = action('Merge Racks', self.unbreakRack, None, 'merge selected racks',
+        merge_racks = action('Merge Racks', self.unbreakRack, None, None,
                              'Merge the selected racks into a single rack (undo rack break)')
 
-        show_crosshairs = action('Show beam crosshairs', self.showCrosshairs, None, icon='eye', tip='show crosshairs over beam annotations',
-                                 checkable=True)
+        show_crosshairs = action('Show beam crosshairs', self.showCrosshairs, None, 'eye',
+                                 'show crosshairs over beam annotations', checkable=True)
 
-        rotate_rack = action('Rotate Rack', self.rotateRack, None, 'rotate selected rack',
+        toggle_racks = action('Toggle racks', self.toggleRacks, None, 'eye', 'Toggle rack rendering on/off')
+
+        toggle_pallets = action('Toggle pallets', self.togglePallets, None, 'eye', 'Toggle pallet rendering on/off')
+
+        toggle_walls = action('Toggle walls', self.toggleWalls, None, 'eye', 'Toggle walls rendering on/off')
+
+        rotate_rack = action('Rotate Rack', self.rotateRack, None, None,
                              'Change the orientation of the selected rack')
 
-        predict_pallets = action('Predict pallets', self.predictPalletsForAllRacks, None, 'predict pallet centers',
+        predict_pallets = action('Predict pallets', self.predictPalletsForAllRacks, None, None,
                                  'Predict the pallet locations for all the rack annotations')
 
-        select_pallets_by_rack = action('Select pallets by rack', self.selectPalletsByRack, None,
-                                        'Select pallets by rack',
+        select_pallets_by_rack = action('Select pallets by rack', self.selectPalletsByRack, None, None,
                                         'Select all pallets that belong to the selected rack')
 
-        select_pallets_by_group = action('Select pallets by group', self.selectPalletsByGroup, None,
-                                         'Select pallets by group',
+        select_pallets_by_group = action('Select pallets by group', self.selectPalletsByGroup, None, None,
                                          'Select all pallets that belong to the selected rack group')
 
         select_beams = action('Select beams', self.selectBeams, None, 'select beams', 'Select all beams')
 
-        select_beam_row = action('Select beam row', self.selectBeamRow, None, 'select beam row',
+        select_beam_row = action('Select beam row', self.selectBeamRow, None, None,
                                  'Select all the beams in the selected row')
 
-        select_beam_column = action('Select beam column', self.selectBeamColumn, None, 'select beam column',
+        select_beam_column = action('Select beam column', self.selectBeamColumn, None, None,
                                  'Select all the beams in the selected column')
 
-        select_pallets = action('Select pallets', self.selectPallets, None, 'select pallets', 'Select all pallets')
+        select_pallets = action('Select pallets', self.selectPallets, None, None, 'Select all pallets')
 
-        interpolate_beams = action('Interp beams', self.interpolateBeamPositions, None, 'interpolate beams',
+        interpolate_beams = action('Interp beams', self.interpolateBeamPositions, None, None,
                                    'Interpolate beam positions based on existing beam positions')
 
-        user_tighten_rack = action('Tighten rack', self.userTightenRack, None, 'tighten rack',
+        user_tighten_rack = action('Tighten rack', self.userTightenRack, None, None,
                                    'Tighten the selected rack around the points in the point cloud')
 
-        annotate_3d_beam = action('Annotate 3D beam', self.annotate3dBeam, None, 'annotate 3d beam',
+        annotate_3d_beam = action('Annotate 3D beam', self.annotate3dBeam, None, None,
                                   'Use the points highlighted in the 3D viewer to create beam annotation')
 
         toggle_keep_prev_mode = action(
@@ -555,6 +557,7 @@ class MainWindow(QtWidgets.QMainWindow):
             checkHighlightSlice=check_highlight_slice,
             render3d=render_3d,
             showCrosshairs=show_crosshairs,
+            toggleRacks=toggle_racks, togglePallets=toggle_pallets, toggleWalls=toggle_walls,
             highlightWalls=highlight_walls,
             viewAnnotation3d=view_annotation_3d,
             updateAnnotation=update_annotation,
@@ -672,12 +675,14 @@ class MainWindow(QtWidgets.QMainWindow):
                 None,
                 fill_drawing,
                 None,
-                hideAll,
-                showAll,
                 render_3d,
-                check_highlight_slice,
                 view_annotation_3d,
+                check_highlight_slice,
+                None,
                 show_crosshairs,
+                toggle_racks,
+                toggle_pallets,
+                toggle_walls,
                 None,
                 zoomIn,
                 zoomOut,
@@ -770,6 +775,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.annotationMode = None
         self.imageData = None
         self.sliceIndices = None
+        self.renderingRacks, self.renderingWalls, self.renderingPallets = True, True, True
         self.pointcloud = PointCloud(render=False)
         self._cur_group = 0
         self._cur_rack = 0
@@ -929,6 +935,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.annotationMode = None
         self.sliceIndices = None
         self.imageData = None
+        self.renderingRacks, self.renderingWalls, self.renderingPallets = True, True, True
         self.pointcloud.close_viewer()
         self.pointcloud = PointCloud(render=False)
         self._cur_group = 0
@@ -1729,7 +1736,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 )
                 self.status(self.tr("Error reading %s") % label_file)
                 return False
-            self.otherDat.a = self.labelFile.otherData
+            self.otherData = self.labelFile.otherData
         else:
             self.labelFile = None
 
@@ -1820,6 +1827,7 @@ class MainWindow(QtWidgets.QMainWindow):
         lines nearby, return False along with the original point location. If there is a horizontal and/or vertical
         beam crosshair line nearby, return True with the coordinates of the nearby lines.
         """
+        threshold = threshold / self.scale
         beams = []
         for item, shape in self.labelList.itemsToShapes:
             if shape.label == 'beam':
@@ -1928,9 +1936,10 @@ class MainWindow(QtWidgets.QMainWindow):
         Given a beam, loop over all existing racks and break each one that is close enough to this beam.
         """
         for rack in self.racks:
-            breaks, pos, orient = self.beamBreaksRack(beam, rack)
-            if breaks:
-                self.breakRack(pos, rack, orient)
+            if self.canvas.isVisible(rack):
+                breaks, pos, orient = self.beamBreaksRack(beam, rack)
+                if breaks:
+                    self.breakRack(pos, rack, orient)
         self.setDirty()
         self.updatePixmap()
 
@@ -2602,7 +2611,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 item.setSelected(False)
 
     def selectBeamColumn(self):
-        intersection, intersected = self.nearestCrosshairIntersection(self.canvas.prevPoint, 1.0)
+        intersection, intersected = self.nearestCrosshairIntersection(self.canvas.prevPoint, 3.0)
         if not intersected:
             return
         for item, shape in self.labelList.itemsToShapes:
@@ -2612,7 +2621,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 item.setSelected(False)
 
     def selectBeamRow(self):
-        intersection, intersected = self.nearestCrosshairIntersection(self.canvas.prevPoint, 1.0)
+        intersection, intersected = self.nearestCrosshairIntersection(self.canvas.prevPoint, 3.0)
         if not intersected:
             return
         for item, shape in self.labelList.itemsToShapes:
@@ -2710,3 +2719,31 @@ class MainWindow(QtWidgets.QMainWindow):
             self.finalizeBeam(beam, snapToPoints=False)
             self.addLabel(beam)
             self.updatePixmap()
+
+    def toggleRacks(self):
+        self.renderingRacks = not self.renderingRacks
+        if self.renderingRacks:
+            for rack in self.racks:
+                self.canvas.setShapeVisible(rack)
+        else:
+            for rack in self.racks:
+                self.canvas.setShapeInvisible(rack)
+
+    def togglePallets(self):
+        self.renderingPallets = not self.renderingPallets
+        if self.renderingPallets:
+            for pallet in self.pallets:
+                self.canvas.setShapeVisible(pallet)
+        else:
+            for pallet in self.pallets:
+                self.canvas.setShapeInvisible(pallet)
+
+    def toggleWalls(self):
+        self.renderingWalls = not self.renderingWalls
+        walls = self.walls
+        if not walls:
+            return
+        if self.renderingWalls:
+            self.canvas.setShapeVisible(walls)
+        else:
+            self.canvas.setShapeInvisible(walls)

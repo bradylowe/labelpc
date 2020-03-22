@@ -446,8 +446,7 @@ class Canvas(QtWidgets.QWidget):
                     self.setHiding()
                     if multiple_selection_mode:
                         if shape not in self.selectedShapes:
-                            self.selectionChanged.emit(
-                                self.selectedShapes + [shape])
+                            self.selectionChanged.emit(self.selectedShapes + [shape])
                     else:
                         self.selectionChanged.emit([shape])
                     return
