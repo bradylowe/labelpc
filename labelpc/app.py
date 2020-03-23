@@ -53,7 +53,6 @@ from labelpc.pointcloud.Voxelize import VoxelGrid
 #   --- Austin:
 #   //DONE Add distance threshold for snap functions to config file (snapToCenter, snapToCorner, rackSep, rackSplit)
 #   //DONE Draw crosshairs on beams that span the canvas (toggle on/off)
-#   Interpolate beam positions inside wall bounds or canvas bounds
 #   Color one side of rectangle a different color based on group ID
 #   //DONE Toggle individual annotations on/off (turn off SHOWALL)
 #   Create icons for buttons
@@ -2222,7 +2221,7 @@ class MainWindow(QtWidgets.QMainWindow):
         if not self.mayContinue():
             return
         path = osp.dirname(str(self.filename)) if self.filename else '.'
-        formats = ['*.las']
+        formats = ['*.las', '*.laz', '*.pcd', '*.ply', '*.pts']
         filters = self.tr("Point Cloud files (%s)") % ' '.join(
             formats + ['*%s' % LabelFile.suffix])
         filename = QtWidgets.QFileDialog.getOpenFileName(
