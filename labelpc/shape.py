@@ -171,7 +171,7 @@ class Shape(object):
                 self.line_color = QtGui.QColor(r, g, b, 20)
                 for line in self.lines:
                     painter.drawLine(line)
-            elif 'rack' in self.label:
+            elif self.label and 'rack' in self.label:
                 painter.drawLine(self.lines[0])
             if self.fill:
                 color = self.select_fill_color \

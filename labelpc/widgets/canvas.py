@@ -33,6 +33,7 @@ class Canvas(QtWidgets.QWidget):
     vertexSelected = QtCore.Signal(bool)
     rackChanged = QtCore.Signal(Shape)
     beamChanged = QtCore.Signal(Shape)
+    rotateRack = QtCore.Signal()
 
     CREATE, EDIT = 0, 1
 
@@ -707,6 +708,8 @@ class Canvas(QtWidgets.QWidget):
             self.update()
         elif key == QtCore.Qt.Key_Return and self.canCloseShape():
             self.finalise()
+        elif key == QtCore.Qt.Key_R:
+            self.rotateRack.emit()
 
     def setLastLabel(self, text, flags):
         assert text

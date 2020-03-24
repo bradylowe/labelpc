@@ -194,6 +194,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.canvas.breakRack.connect(self.breakRackManual)
         self.canvas.rackChanged.connect(self.finalizeRack)
         self.canvas.beamChanged.connect(self.finalizeBeam)
+        self.canvas.rotateRack.connect(self.rotateRack)
 
         self.setCentralWidget(scrollArea)
 
@@ -229,7 +230,7 @@ class MainWindow(QtWidgets.QMainWindow):
         showNextSlice = action(
             self.tr('Next Slice'),
             self.showNextSlice,
-            None,
+            shortcuts['open_next'],
             'next slice',
             self.tr(u'Show next slice of point cloud'),
             enabled=False,
@@ -237,7 +238,7 @@ class MainWindow(QtWidgets.QMainWindow):
         showLastSlice = action(
             self.tr('Last Slice'),
             self.showLastSlice,
-            None,
+            shortcuts['open_prev'],
             'next slice',
             self.tr(u'Show previous slice of point cloud'),
             enabled=False,
@@ -342,7 +343,7 @@ class MainWindow(QtWidgets.QMainWindow):
                                  'Select all the beams in the selected row')
 
         select_beam_column = action('Select beam column', self.selectBeamColumn, None, None,
-                                 'Select all the beams in the selected column')
+                                    'Select all the beams in the selected column')
 
         select_pallets = action('Select pallets', self.selectPallets, None, None, 'Select all pallets')
 
@@ -2170,6 +2171,7 @@ class MainWindow(QtWidgets.QMainWindow):
             rack.orient += 1
             if rack.orient >= 4:
                 rack.orient = 0
+            self.setDirty()
             rack.lines = [rack.getRackExitEdge()]
             self.updatePixmap()
 
