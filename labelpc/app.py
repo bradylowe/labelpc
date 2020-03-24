@@ -1231,6 +1231,8 @@ class MainWindow(QtWidgets.QMainWindow):
             shape.close()
             if shape.label == 'beam':
                 shape.lines = self.canvas.getEdges(shape)
+            elif 'rack' in shape.label:
+                shape.lines = [shape.getRackExitEdge()]
 
             default_flags = {}
             if self._config['label_flags']:
@@ -1400,6 +1402,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 shape.rack_id = self.nextRackId()
                 self.tightenRack(shape)
                 shape.orient = self.rackOrientation(shape)
+                shape.lines = [shape.getRackExitEdge()]
                 #self.showRackHistogram(shape, axis='short')
                 #self.showRackHistogram(shape, axis='long')
                 if self.isTwoRacks(shape):
@@ -1961,7 +1964,9 @@ class MainWindow(QtWidgets.QMainWindow):
             orientation = rack.orient
         if orientation % 2 == 0:
             rack.points[1].setX(pos - 0.2)
+            rack.lines = [rack.getRackExitEdge()]
             new_rack.points[0].setX(pos + 0.2)
+            new_rack.lines = [new_rack.getRackExitEdge()]
         else:
             rack.points[1].setY(pos - 0.2)
             new_rack.points[0].setY(pos + 0.2)
@@ -2159,17 +2164,14 @@ class MainWindow(QtWidgets.QMainWindow):
     def rotateRack(self):
         items = self.labelList.selectedItems()
         if items:
-            rack = None
-            for item in items:
-                shape = self.labelList.get_shape_from_item(item)
-                if 'rack' in shape.label:
-                    rack = shape
-                    break
-            if rack is not None:
-                rack.orient += 1
-                if rack.orient >= 4:
-                    rack.orient = 0
-                print('rotated rack')
+            rack = self.labelList.get_shape_from_item(items[0])
+            if 'rack' not in rack.label:
+                return
+            rack.orient += 1
+            if rack.orient >= 4:
+                rack.orient = 0
+            rack.lines = [rack.getRackExitEdge()]
+            self.updatePixmap()
 
     def render3d(self):
         if not self.pointcloud.viewer_is_ready():

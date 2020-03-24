@@ -171,6 +171,8 @@ class Shape(object):
                 self.line_color = QtGui.QColor(r, g, b, 20)
                 for line in self.lines:
                     painter.drawLine(line)
+            elif 'rack' in self.label:
+                painter.drawLine(self.lines[0])
             if self.fill:
                 color = self.select_fill_color \
                     if self.selected else self.fill_color
@@ -286,6 +288,20 @@ class Shape(object):
 
     def copy(self):
         return copy.deepcopy(self)
+
+    def getRackExitEdge(self):
+        center = (self.points[0] + self.points[1]) / 2.0
+        p1 = QtCore.QPoint(center.x(), center.y())
+        p2 = QtCore.QPoint(center.x(), center.y())
+        if self.orient == 0:
+            p2.setY(self.points[1].y())
+        elif self.orient == 1:
+            p2.setX(self.points[1].x())
+        elif self.orient == 2:
+            p2.setY(self.points[0].y())
+        elif self.orient == 3:
+            p2.setX(self.points[0].x())
+        return QtCore.QLine(p1, p2)
 
     @property
     def displayName(self):
