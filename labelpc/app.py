@@ -322,6 +322,8 @@ class MainWindow(QtWidgets.QMainWindow):
 
         toggle_walls = action('Toggle walls', self.toggleWalls, None, 'eye', 'Toggle walls rendering on/off')
 
+        toggle_beams = action('Toggle beams', self.toggleBeams, None, 'eye', 'Toggle beam rendering on/off')
+
         rotate_rack = action('Rotate Rack', self.rotateRack, None, None,
                              'Change the orientation of the selected rack')
 
@@ -557,6 +559,7 @@ class MainWindow(QtWidgets.QMainWindow):
             render3d=render_3d,
             showCrosshairs=show_crosshairs,
             toggleRacks=toggle_racks, togglePallets=toggle_pallets, toggleWalls=toggle_walls,
+            toggleBeams=toggle_beams,
             highlightWalls=highlight_walls,
             viewAnnotation3d=view_annotation_3d,
             updateAnnotation=update_annotation,
@@ -682,6 +685,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 toggle_racks,
                 toggle_pallets,
                 toggle_walls,
+                toggle_beams,
                 None,
                 zoomIn,
                 zoomOut,
@@ -775,6 +779,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.imageData = None
         self.sliceIndices = None
         self.renderingRacks, self.renderingWalls, self.renderingPallets = True, True, True
+        self.renderingBeams = True,
         self.pointcloud = PointCloud(render=False)
         self._cur_group = 0
         self._cur_rack = 0
@@ -935,6 +940,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.sliceIndices = None
         self.imageData = None
         self.renderingRacks, self.renderingWalls, self.renderingPallets = True, True, True
+        self.renderingBeams = True,
         self.pointcloud.close_viewer()
         self.pointcloud = PointCloud(render=False)
         self._cur_group = 0
@@ -2746,3 +2752,12 @@ class MainWindow(QtWidgets.QMainWindow):
             self.canvas.setShapeVisible(walls)
         else:
             self.canvas.setShapeInvisible(walls)
+
+    def toggleBeams(self):
+        self.renderingBeams = not self.renderingBeams
+        if self.renderingBeams:
+            for beam in self.beams:
+                self.canvas.setShapeVisible(beam)
+        else:
+            for beam in self.beams:
+                self.canvas.setShapeInvisible(beam)

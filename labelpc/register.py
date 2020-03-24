@@ -59,21 +59,6 @@ def door_loss(door, ref, reg):
     return total
 
 
-'''
-def non_door_score(reference_objects, register_objects):
-    total_dist = 0.0
-    for ref_points in reference_objects.values():
-        for ref_point in ref_points:
-            min_distance = 10000.0
-            for reg_points in register_objects.values():
-                for reg_point in reg_points:
-                    if distance(reg_point, ref_point) < min_distance:
-                        min_distance = distance(reg_point, ref_point)
-            total_dist += min_distance
-    return total_dist
-'''
-
-
 def rotate_dataframe(df, angle, center=None):
     if center is None:
         center = np.zeros(2)
