@@ -4,26 +4,7 @@ import json
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-
-if len(sys.argv) < 3:
-    print('Please supply reference file and register file')
-    sys.exit()
-
-reference_file = sys.argv[1]  # File that defines the reference frame or coordinate system including a door
-register_file = sys.argv[2]   # File that is to be registered to the reference file including same door
-
-with open(reference_file) as f:
-    reference_data = json.load(f)
-with open(register_file) as f:
-    register_data = json.load(f)
-
-
-ref_shapes = pd.DataFrame(columns=['label', 'points'])
-for i, s in enumerate(reference_data['shapes']):
-    ref_shapes.loc[i] = [s['label'], np.array(s['points'])]
-reg_shapes = pd.DataFrame(columns=['label', 'points'])
-for i, s in enumerate(register_data['shapes']):
-    reg_shapes.loc[i] = [s['label'], np.array(s['points'])]
+from labelpc.pointcloud.PointCloud import PointCloud
 
 
 def find_in_dataframe(df, query='door', indices=False):
@@ -104,8 +85,9 @@ def iou(df1, df2):
 
 
 def register(door, ref, reg):
+    angle_res = 90.0
     best_angle, best_offset, min_dist = None, None, 1000000.0
-    for i in range(4):
+    for i in range(int(360.0 / angle_res)):
         for ref_points in ref.loc[ref['label'] == door, 'points']:
             for reg_points in reg.loc[reg['label'] == door, 'points']:
                 cur_reg = reg.copy()
@@ -115,11 +97,12 @@ def register(door, ref, reg):
                 if dist < min_dist:
                     min_dist = dist
                     best_offset = offset
-                    best_angle = i * 90.0
-        rotate_dataframe(reg, 90.0)
+                    best_angle = i * angle_res
+        rotate_dataframe(reg, angle_res)
 
     rotate_dataframe(reg, best_angle)
     reg['points'] += best_offset
+    return best_angle, best_offset
 
 
 def scatter_plot(df, marker='.'):
@@ -140,8 +123,47 @@ def show_points(df1, df2):
     plt.show()
 
 
-print(door_loss(find_common_doors(ref_shapes, reg_shapes)[0], ref_shapes, reg_shapes))
-show_points(ref_shapes, reg_shapes)
-register('door_room5_room6', ref_shapes, reg_shapes)
-show_points(ref_shapes, reg_shapes)
-print(door_loss(find_common_doors(ref_shapes, reg_shapes)[0], ref_shapes, reg_shapes))
+def save_dataframe(df):
+    # Todo: complete this function
+    # Write the data back to the json file (register file)
+    pass
+
+
+def register_pointcloud(filename, angle, offset):
+    # Todo: complete this function
+    # Open the point cloud, rotate it, offset it, and write it back to file
+    basename, ext = filename.split('.')
+    outfile = basename + '_registered.' + ext
+    pc = PointCloud(filename, render=False)
+    pc.rotate_xy(angle)
+    pc.translate_xy(offset)
+    pc.write(outfile, overwrite=True)
+
+
+if __name__ == "__main__":
+
+    if len(sys.argv) < 3:
+        print('Please supply reference file and one or more register files')
+        sys.exit()
+
+    reference_file = sys.argv[1]  # File that defines the reference frame or coordinate system including a door
+    register_file = sys.argv[2]   # File that is to be registered to the reference file including same door
+
+    with open(reference_file) as f:
+        reference_data = json.load(f)
+    with open(register_file) as f:
+        register_data = json.load(f)
+
+    ref_shapes = pd.DataFrame(columns=['label', 'points'])
+    for i, s in enumerate(reference_data['shapes']):
+        ref_shapes.loc[i] = [s['label'], np.array(s['points'])]
+    reg_shapes = pd.DataFrame(columns=['label', 'points'])
+    for i, s in enumerate(register_data['shapes']):
+        reg_shapes.loc[i] = [s['label'], np.array(s['points'])]
+
+    print(door_loss(find_common_doors(ref_shapes, reg_shapes)[0], ref_shapes, reg_shapes))
+    show_points(ref_shapes, reg_shapes)
+    angle, offset = register('door_room1_room2', ref_shapes, reg_shapes)
+    register_pointcloud(register_data['sourcePath'], angle, offset)
+    show_points(ref_shapes, reg_shapes)
+    print(door_loss(find_common_doors(ref_shapes, reg_shapes)[0], ref_shapes, reg_shapes))
