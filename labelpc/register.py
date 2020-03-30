@@ -197,14 +197,18 @@ def register(dfs, names):
                 best_angle, best_offset, min_cost = None, None, 1000000.0
                 for j in range(int(360.0 / angle_res)):
                     anchor_doors = anchor_room.loc[anchor_room['label'] == door, 'points'].values
+                    anchor_door_orient = np.abs(anchor_doors[0][1] - anchor_doors[0][0])
+                    anchor_door_orient = anchor_door_orient[0] > anchor_door_orient[1]
                     anchor_door_center = np.average([np.average(d, axis=0) for d in anchor_doors], axis=0)
                     current_doors = current_room.loc[current_room['label'] == door, 'points'].values
+                    current_door_orient = np.abs(current_doors[0][1] - current_doors[0][0])
+                    current_door_orient = current_door_orient[0] > current_door_orient[1]
                     current_door_center = np.average([np.average(d, axis=0) for d in current_doors], axis=0)
                     current_room_copy = current_room.copy()
                     offset = anchor_door_center - current_door_center
                     current_room_copy['points'] += offset
                     cost = intersection(anchor_room, current_room_copy)
-                    if cost < min_cost:
+                    if cost < min_cost and anchor_door_orient == current_door_orient:
                         min_cost = cost
                         best_offset = offset
                         best_angle = j * angle_res
@@ -291,6 +295,7 @@ if __name__ == "__main__":
     show_points(shapes)
 
     # Register the point clouds
+    '''
     if mode == 'all_to_one':
         for i in range(1, len(shapes)):
             angle, offset, cost = register_two_dfs(shapes[0], shapes[i])
@@ -303,6 +308,7 @@ if __name__ == "__main__":
                 continue
             apply_registration_to_dataframe(df, angle, offset)
             apply_registration_to_pointcloud(sources[i], angle, offset)
-    #register(shapes, names)
+    '''
+    register(shapes, names)
 
     show_points(shapes)
