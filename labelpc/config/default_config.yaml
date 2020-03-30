@@ -13,7 +13,7 @@ snap_corner_thresh: 0.5
 
 flags: null
 label_flags: null
-labels: [walls, pole, beam, door, select_rack, drive_in_rack, extra_deep_rack, noise]
+labels: [walls, pole, beam, door, select_rack, drive_in_rack, extra_deep_rack, noise, I_beam]
 file_search: null
 sort_labels: true
 validate_label: null

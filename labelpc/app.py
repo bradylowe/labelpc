@@ -356,6 +356,9 @@ class MainWindow(QtWidgets.QMainWindow):
         annotate_3d_beam = action('Annotate 3D beam', self.annotate3dBeam, None, None,
                                   'Use the points highlighted in the 3D viewer to create beam annotation')
 
+        convert_to_from_i_beam = action('Convert to/from I-beam', self.convertToFromIBeam, None, None,
+                                        'Convert the selected beams from one beam type to another')
+
         toggle_keep_prev_mode = action(
             self.tr('Keep Previous Annotation'),
             self.toggleKeepPrevMode,
@@ -575,6 +578,7 @@ class MainWindow(QtWidgets.QMainWindow):
             interpolateBeams=interpolate_beams,
             userTightenRack=user_tighten_rack,
             annotate3dbeam=annotate_3d_beam,
+            convertToFromIBeam=convert_to_from_i_beam,
             #fileMenuActions=(open_, opendir, save, saveAs, close, quit),
             fileMenuActions=(open_, save, saveAs, close, quit),
             tool=(),
@@ -741,6 +745,7 @@ class MainWindow(QtWidgets.QMainWindow):
             select_pallets_by_rack,
             interpolate_beams,
             annotate_3d_beam,
+            convert_to_from_i_beam,
         )
 
         self.statusBar().showMessage(self.tr('%s started.') % __appname__)
@@ -1083,7 +1088,7 @@ class MainWindow(QtWidgets.QMainWindow):
             return
 
         self.annotationMode = label
-        if label in ['pole', 'beam']:
+        if label in ['pole', 'beam', 'I_beam']:
             self.toggleDrawMode(False, createMode='point', showPopup=False)
         elif 'rack' in label or label == 'noise':
             self.toggleDrawMode(False, createMode='rectangle', showPopup=False)
@@ -1230,8 +1235,10 @@ class MainWindow(QtWidgets.QMainWindow):
             for p in points:
                 shape.addPoint(self.pointcloudToQpoint(p))
             shape.close()
-            if shape.label == 'beam':
+            if 'beam' in shape.label:
                 shape.lines = self.canvas.getEdges(shape)
+                if shape.label == 'I_beam':
+                    shape.point_type = Shape.P_SQUARE
             elif 'rack' in shape.label:
                 shape.lines = [shape.getRackExitEdge()]
 
@@ -1382,7 +1389,7 @@ class MainWindow(QtWidgets.QMainWindow):
             shape = self.canvas.setLastLabel(text, flags)
             shape.group_id = group_id
             # If this is a new pole or beam, snap the annotation to the center of the object
-            if text == 'beam':
+            if 'beam' in text:
                 self.finalizeBeam(shape)
             elif text == 'pole':
                 transformed = self.qpointToPointcloud(shape.points[0])
@@ -2002,6 +2009,8 @@ class MainWindow(QtWidgets.QMainWindow):
             self.breakAllRacksWithBeam(beam)
         beam.lines = self.canvas.getEdges(beam)
         beam.crosshairs = self.actions.showCrosshairs.isChecked()
+        if beam.label == 'I_beam':
+            beam.point_type = Shape.P_SQUARE
 
     def breakAllRacks(self):
         size = len(self.beams)
@@ -2435,7 +2444,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.setDirty()
 
     def highlightPointsInLabel(self, shape):
-        if shape.label == 'beam':
+        if 'beam' in shape.label:
             point = np.array(self.qpointToPointcloud(shape.points[0]))
             box = [point - 0.1, point + 0.1]
         elif shape.label == 'pole':
@@ -2459,7 +2468,7 @@ class MainWindow(QtWidgets.QMainWindow):
         if 'rack' in shape.label:
             shape.points[0] = self.pointcloudToQpoint(points.min(axis=0))
             shape.points[1] = self.pointcloudToQpoint(points.max(axis=0))
-        elif shape.label == 'beam' or shape.label == 'pole':
+        elif 'beam' in shape.label or shape.label == 'pole':
             shape.points[0] = self.pointcloudToQpoint((points.min(axis=0) + points.max(axis=0)) / 2.0)
 
     def openDirDialog(self, _value=False, dirpath=None):
@@ -2501,7 +2510,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def beams(self):
         beams = []
         for _, shape in self.labelList.itemsToShapes:
-            if shape.label == 'beam':
+            if 'beam' in shape.label:
                 beams.append(shape)
         return beams
 
@@ -2728,6 +2737,20 @@ class MainWindow(QtWidgets.QMainWindow):
             self.finalizeBeam(beam, snapToPoints=False)
             self.addLabel(beam)
             self.updatePixmap()
+
+    def convertToFromIBeam(self):
+        items = self.labelList.selectedItems()
+        for item in items:
+            shape = self.labelList.get_shape_from_item(item)
+            if 'beam' in shape.label:
+                if shape.label == 'beam':
+                    shape.label = 'I_beam'
+                    shape.point_type = Shape.P_SQUARE
+                else:
+                    shape.label = 'beam'
+                    shape.point_type = Shape.P_ROUND
+        if items:
+            self.setDirty()
 
     def toggleRacks(self):
         self.renderingRacks = not self.renderingRacks
