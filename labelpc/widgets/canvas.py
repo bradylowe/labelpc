@@ -487,6 +487,8 @@ class Canvas(QtWidgets.QWidget):
         if dp:
             for shape in shapes:
                 shape.moveBy(dp)
+                if 'rack' in shape.label:
+                    shape.calculateRackExitEdge()
             self.prevPoint = pos
             return True
         return False

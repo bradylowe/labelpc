@@ -1240,7 +1240,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 if shape.label == 'I_beam':
                     shape.point_type = Shape.P_SQUARE
             elif 'rack' in shape.label:
-                shape.lines = [shape.getRackExitEdge()]
+                shape.calculateRackExitEdge()
 
             default_flags = {}
             if self._config['label_flags']:
@@ -1410,7 +1410,6 @@ class MainWindow(QtWidgets.QMainWindow):
                 shape.rack_id = self.nextRackId()
                 self.tightenRack(shape)
                 shape.orient = self.rackOrientation(shape)
-                shape.lines = [shape.getRackExitEdge()]
                 #self.showRackHistogram(shape, axis='short')
                 #self.showRackHistogram(shape, axis='long')
                 if self.isTwoRacks(shape):
@@ -1422,6 +1421,7 @@ class MainWindow(QtWidgets.QMainWindow):
                     self.resolveRackRectIntersection(shape)
                     self.resolveRackRectIntersection(shape, noise=True)
                     self.resolveRackWallIntersection(shape)
+                    shape.calculateRackExitEdge()
                     if not self.isRackBigEnough(shape):
                         self.remLabels([shape])
             self.addLabel(shape)
@@ -1972,9 +1972,7 @@ class MainWindow(QtWidgets.QMainWindow):
             orientation = rack.orient
         if orientation % 2 == 0:
             rack.points[1].setX(pos - 0.2)
-            rack.lines = [rack.getRackExitEdge()]
             new_rack.points[0].setX(pos + 0.2)
-            new_rack.lines = [new_rack.getRackExitEdge()]
         else:
             rack.points[1].setY(pos - 0.2)
             new_rack.points[0].setY(pos + 0.2)
@@ -1991,6 +1989,7 @@ class MainWindow(QtWidgets.QMainWindow):
             rack.orient = self.rackOrientation(rack)
         if normalize:
             self.normalizeRackDimensions(rack)
+        rack.calculateRackExitEdge()
         if not self.isRackBigEnough(rack):
             self.remLabels([rack])
 
@@ -2079,7 +2078,8 @@ class MainWindow(QtWidgets.QMainWindow):
         total_dims = box[1] - box[0]
         discrete_dims = (total_dims / unit_dims).astype(int)
         discrete_dims += total_dims / unit_dims - discrete_dims > 0.6
-        discrete_dims[1-orient] = min(discrete_dims[1-orient], self._config[rack.label][2])
+        if rack.label == 'select_rack':
+            discrete_dims[1-orient] = min(discrete_dims[1-orient], 1)
         box[1] = box[0] + unit_dims * discrete_dims
         rack.points[0], rack.points[1] = self.pointcloudToQpoint(box[0]), self.pointcloudToQpoint(box[1])
 
@@ -2181,7 +2181,7 @@ class MainWindow(QtWidgets.QMainWindow):
             if rack.orient >= 4:
                 rack.orient = 0
             self.setDirty()
-            rack.lines = [rack.getRackExitEdge()]
+            rack.calculateRackExitEdge()
             self.updatePixmap()
 
     def render3d(self):
