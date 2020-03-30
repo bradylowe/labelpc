@@ -15,29 +15,31 @@ def find_in_dataframe(df, query='door', indices=False):
 
 
 # Doors must have common name theme. (DOOR before DOCK, DOOR1 before DOOR2)
-def find_common_doors(ref, reg):
-    common = []
+def get_common_door(ref, reg):
     ref_doors = ref.loc[ref['label'].str.contains('door')]
     for label in ref_doors['label'].unique():
         doors = reg.loc[reg['label'].str.contains(label)]
         if len(doors):
-            common.append(label)
-    return common
+            return label
 
 
 def distance(p1, p2):
     return np.sqrt(np.dot(p1 - p2, p1 - p2))
 
 
+# Return the average distance from each door in one scan to the nearest door in the other scan
 def door_loss(door, ref, reg):
-    total = 0.0
+    total, count = 0.0, 0
     for ref_points in ref.loc[ref['label'] == door, 'points']:
-        min_dist = 100000.0
+        min_dist = 1000000.0
         for reg_points in reg.loc[reg['label'] == door, 'points']:
-            ref_c, reg_c = ref_points.mean(axis=0), reg_points.mean(axis=0)
-            min_dist = min(min_dist, distance(ref_c, reg_c))
+            ref_d, reg_d = np.abs(ref_points[1] - ref_points[0]), np.abs(reg_points[1] - reg_points[0])
+            if (ref_d[0] > ref_d[1]) == (reg_d[0] > reg_d[1]):
+                ref_c, reg_c = ref_points.mean(axis=0), reg_points.mean(axis=0)
+                min_dist = min(min_dist, distance(ref_c, reg_c))
         total += min_dist
-    return total
+        count += 1
+    return total / count
 
 
 def rotate_dataframe(df, angle, center=None):
@@ -62,7 +64,7 @@ def dataframe_bounds(df):
     return min_p[0], min_p[1], max_p[0], max_p[1]
 
 
-def iou(df1, df2):
+def intersection(df1, df2):
     boxA = dataframe_bounds(df1)
     boxB = dataframe_bounds(df2)
     # determine the (x, y)-coordinates of the intersection rectangle
@@ -71,41 +73,154 @@ def iou(df1, df2):
     xB = min(boxA[2], boxB[2])
     yB = min(boxA[3], boxB[3])
     # compute the area of intersection rectangle
-    interArea = max(0, xB - xA + 1) * max(0, yB - yA + 1)
-    # compute the area of both the prediction and ground-truth
-    # rectangles
-    boxAArea = (boxA[2] - boxA[0] + 1) * (boxA[3] - boxA[1] + 1)
-    boxBArea = (boxB[2] - boxB[0] + 1) * (boxB[3] - boxB[1] + 1)
-    # compute the intersection over union by taking the intersection
-    # area and dividing it by the sum of prediction + ground-truth
-    # areas - the interesection area
-    iou = interArea / float(boxAArea + boxBArea - interArea)
-    # return the intersection over union value
-    return iou
+    return max(0, xB - xA + 1) * max(0, yB - yA + 1)
 
 
-def register(door, ref, reg):
+# Measure how well two dataframes are registered together, 0.0 is perfect score
+def cost_two_dfs(df1, df2, door=None):
+    if door is None:
+        door = get_common_door(df1, df2)
+    return door_loss(door, df1, df2) * (1.0 + intersection(df1, df2))
+
+
+# Measure how well many dataframes are registered together, 0.0 is perfect score
+def cost_many_dfs(dfs):
+    cost = 0.0
+    for df1 in dfs:
+        for df2 in dfs:
+            if df1 is df2:
+                continue
+            cost += cost_two_dfs(df1, df2)
+    return cost
+
+
+def register_many_dfs(dfs):
+
+    angles, offsets = np.zeros((len(dfs), len(dfs))), np.zeros((len(dfs), len(dfs), 2))
+    costs = 1000000.0 * np.ones((len(dfs), len(dfs)))
+    for i in range(len(dfs)):
+        for j in range(i+1, len(dfs)):
+            angles[i][j], offsets[i][j], costs[i][j] = register_two_dfs(dfs[i], dfs[j])
+
+    print(angles)
+    print(costs.astype(int))
+
+    best = np.argmin(costs, axis=0)
+    best_angles, best_offsets, best_costs = [], [], []
+    for i in range(len(best)):
+        best_angles.append(angles[best[i], i])
+        best_offsets.append(offsets[best[i], i])
+        best_costs.append(costs[best[i], i])
+
+    return best_angles, best_offsets, best_costs
+
+
+def register_two_dfs(ref, reg, door=None):
+    if door is None:
+        door = get_common_door(ref, reg)
+        if door is None:
+            return 0.0, (0.0, 0.0), 1000000.0
     angle_res = 90.0
-    best_angle, best_offset, min_dist = None, None, 1000000.0
+    best_angle, best_offset, min_cost = None, None, 1000000.0
     for i in range(int(360.0 / angle_res)):
-        for ref_points in ref.loc[ref['label'] == door, 'points']:
-            for reg_points in reg.loc[reg['label'] == door, 'points']:
-                cur_reg = reg.copy()
-                offset = ref_points.mean(axis=0) - reg_points.mean(axis=0)
-                cur_reg['points'] += offset
-                dist = door_loss(door, ref, cur_reg) * (1.0 + iou(ref, cur_reg))
-                if dist < min_dist:
-                    min_dist = dist
-                    best_offset = offset
-                    best_angle = i * angle_res
+        anchor_doors = ref.loc[ref['label'] == door, 'points'].values
+        anchor_door_center = np.average([np.average(d, axis=0) for d in anchor_doors], axis=0)
+        current_doors = reg.loc[reg['label'] == door, 'points'].values
+        current_door_center = np.average([np.average(d, axis=0) for d in current_doors], axis=0)
+        reg_copy = reg.copy()
+        offset = anchor_door_center - current_door_center
+        reg_copy['points'] += offset
+        cost = intersection(ref, reg_copy)
+        if cost < min_cost:
+            min_cost = cost
+            best_offset = offset
+            best_angle = i * angle_res
         rotate_dataframe(reg, angle_res)
-
-    rotate_dataframe(reg, best_angle)
-    reg['points'] += best_offset
-    return best_angle, best_offset
+    return best_angle, best_offset, min_cost
 
 
-def scatter_plot(df, marker='.'):
+def get_names_from_dataframes(dfs):
+    names = []
+    for df in dfs:
+        doors = df.loc[df['label'].str.contains('door')]
+        possible_names = doors[0].split('_')[1:]
+        for name in possible_names:
+            found_name = True
+            for door in doors:
+                if name not in door.split('_')[1:]:
+                    found_name = False
+                    break
+            if found_name:
+                names.append(name)
+                break
+    return names
+
+
+def get_doors_from_dataframes(dfs):
+    doors = []
+    for df in dfs:
+        doors.append(np.unique(df.loc[df['label'].str.contains('door'), 'label']))
+    return doors
+
+
+def get_other_room_name_from_door_name(door, room_name):
+    names = door.split('_')[1:]
+    if names[0] == room_name:
+        return names[1]
+    else:
+        return names[0]
+
+
+def register(dfs, names):
+    # Initially, all rooms are unanchored except for the anchor room
+    anchored = np.zeros(len(dfs), dtype=bool)
+    anchored[0] = True
+    doors = get_doors_from_dataframes(dfs)
+    # Repeatedly loop over the list of rooms and anchor each room to an anchored room it connects to
+    count = 0
+    while not anchored.all() and count < 20:
+        for i in range(len(anchored)):
+            if anchored[i]:
+                continue
+            # Loop over all the doors in this room
+            for door in doors[i]:
+                other_room = get_other_room_name_from_door_name(door, names[i])
+                anchor_idx = names.index(other_room)
+                # If the room that this room connects to via current door is NOT anchored, skip this door
+                if not anchored[anchor_idx]:
+                    continue
+                # Grab the anchored room and the current room we want to connect to the anchored room
+                anchor_room = dfs[anchor_idx]
+                current_room = dfs[i]
+                # Loop over all angles and align the door centers, find the best alignment parameters
+                angle_res = 90.0
+                best_angle, best_offset, min_cost = None, None, 1000000.0
+                for j in range(int(360.0 / angle_res)):
+                    anchor_doors = anchor_room.loc[anchor_room['label'] == door, 'points'].values
+                    anchor_door_center = np.average([np.average(d, axis=0) for d in anchor_doors], axis=0)
+                    current_doors = current_room.loc[current_room['label'] == door, 'points'].values
+                    current_door_center = np.average([np.average(d, axis=0) for d in current_doors], axis=0)
+                    current_room_copy = current_room.copy()
+                    offset = anchor_door_center - current_door_center
+                    current_room_copy['points'] += offset
+                    cost = intersection(anchor_room, current_room_copy)
+                    if cost < min_cost:
+                        min_cost = cost
+                        best_offset = offset
+                        best_angle = j * angle_res
+                    rotate_dataframe(current_room, angle_res)
+                # If the cost is low enough, apply the alignment and consider the current door anchored
+                if min_cost < 1000.0:
+                    print('anchoring', names[i], 'to', names[anchor_idx], 'with min cost:', min_cost)
+                    apply_registration_to_dataframe(current_room, best_angle, best_offset)
+                    #apply_registration_to_pointcloud(fname, best_angle, best_offset)
+                    anchored[i] = True
+                    break
+        count += 1
+
+
+# Create scatter plot of points in a dataframe, but don't show the plot yet
+def scatter_plot(df, color='blue'):
     x, y, c = [], [], []
     for idx, row in df.iterrows():
         for point in row['points']:
@@ -113,23 +228,27 @@ def scatter_plot(df, marker='.'):
             if 'door' in row['label']:
                 c.append('red')
             else:
-                c.append('blue')
-    plt.scatter(x, y, c=c, marker=marker)
+                c.append(color)
+    plt.scatter(x, y, c=c)
 
 
-def show_points(df1, df2):
-    scatter_plot(df1, '.')
-    scatter_plot(df2, 'X')
+# Create a scatter plot for each dataframe in dfs, and then show the final scatter plot
+def show_points(dfs):
+    colors = ['blue', 'green', 'cyan', 'yellow', 'orange', 'magenta', 'black', 'indigo']
+    for i, df in enumerate(dfs):
+        scatter_plot(df, colors[i])
     plt.show()
 
 
+# Write the info in the dataframe out to json file
 def save_dataframe(df):
     # Todo: complete this function
     # Write the data back to the json file (register file)
     pass
 
 
-def register_pointcloud(filename, angle, offset):
+# Take the results of the registration and apply them to the original point clouds
+def apply_registration_to_pointcloud(filename, angle, offset):
     # Todo: complete this function
     # Open the point cloud, rotate it, offset it, and write it back to file
     basename, ext = filename.split('.')
@@ -140,30 +259,50 @@ def register_pointcloud(filename, angle, offset):
     pc.write(outfile, overwrite=True)
 
 
+# Take the results of the registration and apply them to the annotations dataframe
+def apply_registration_to_dataframe(df, angle, offset):
+    rotate_dataframe(df, angle)
+    df['points'] += offset
+
+
 if __name__ == "__main__":
 
     if len(sys.argv) < 3:
         print('Please supply reference file and one or more register files')
         sys.exit()
 
-    reference_file = sys.argv[1]  # File that defines the reference frame or coordinate system including a door
-    register_file = sys.argv[2]   # File that is to be registered to the reference file including same door
+    mode = 'all_to_one'  # Register all other rooms to the first room in the list
+    #mode = 'all_to_all'  # Register all rooms to all other rooms (use the lowest cost pairing)
 
-    with open(reference_file) as f:
-        reference_data = json.load(f)
-    with open(register_file) as f:
-        register_data = json.load(f)
+    # Load the annotation data into a list of pandas dataframes
+    shapes, sources, names = [], [], []
+    for fname in sys.argv[1:]:
+        with open(fname) as f:
+            data = json.load(f)
+            sources.append(data['sourcePath'])
+            names.append(data['roomName'])
+            reg_shapes = pd.DataFrame(columns=['label', 'points'])
+            for i, s in enumerate(data['shapes']):
+                reg_shapes.loc[i] = [s['label'], np.array(s['points'])]
+        shapes.append(reg_shapes)
 
-    ref_shapes = pd.DataFrame(columns=['label', 'points'])
-    for i, s in enumerate(reference_data['shapes']):
-        ref_shapes.loc[i] = [s['label'], np.array(s['points'])]
-    reg_shapes = pd.DataFrame(columns=['label', 'points'])
-    for i, s in enumerate(register_data['shapes']):
-        reg_shapes.loc[i] = [s['label'], np.array(s['points'])]
+    print(names)
 
-    print(door_loss(find_common_doors(ref_shapes, reg_shapes)[0], ref_shapes, reg_shapes))
-    show_points(ref_shapes, reg_shapes)
-    angle, offset = register('door_room1_room2', ref_shapes, reg_shapes)
-    register_pointcloud(register_data['sourcePath'], angle, offset)
-    show_points(ref_shapes, reg_shapes)
-    print(door_loss(find_common_doors(ref_shapes, reg_shapes)[0], ref_shapes, reg_shapes))
+    show_points(shapes)
+
+    # Register the point clouds
+    if mode == 'all_to_one':
+        for i in range(1, len(shapes)):
+            angle, offset, cost = register_two_dfs(shapes[0], shapes[i])
+            apply_registration_to_dataframe(shapes[i], angle, offset)
+            apply_registration_to_pointcloud(sources[i], angle, offset)
+    elif mode == 'all_to_all':
+        angles, offsets, _ = register_many_dfs(shapes)
+        for i, (df, angle, offset) in enumerate(zip(shapes, angles, offsets)):
+            if not i:
+                continue
+            apply_registration_to_dataframe(df, angle, offset)
+            apply_registration_to_pointcloud(sources[i], angle, offset)
+    #register(shapes, names)
+
+    show_points(shapes)
