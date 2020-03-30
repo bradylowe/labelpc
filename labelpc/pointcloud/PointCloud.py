@@ -472,6 +472,15 @@ class PointCloud:
         """
         self.points[['x', 'y', 'z']] -= self.points[['x', 'y', 'z']].values.min(axis=0)
 
+    def rotate_xy(self, angle):
+        angle = np.radians(angle)
+        c, s = np.cos(angle), np.sin(angle)
+        rot = np.array(((c, s), (-s, c)))
+        self.points[['x', 'y']] = np.dot(self.points[['x', 'y']].values, rot)
+
+    def translate_xy(self, offset):
+        self.points[['x', 'y']] += offset
+
     def subsample(self, n=10000000, percent=1.0):
         """
         Return a random sample of the point cloud.
