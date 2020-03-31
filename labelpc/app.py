@@ -1753,6 +1753,9 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.status(self.tr("Error reading %s") % label_file)
                 return False
             self.otherData = self.labelFile.otherData
+            if 'roomName' not in self.otherData:
+                pass
+                self.roomNameDialog()
         else:
             self.labelFile = None
 
@@ -2335,7 +2338,18 @@ class MainWindow(QtWidgets.QMainWindow):
         filename = str(filename)
         return filename
 
+    def roomNameDialog(self):
+        dlg = QtWidgets.QInputDialog(self)
+        dlg.setTextValue('room1')
+        dlg.setLabelText('Room name')
+        dlg.setWindowTitle('Set room name')
+        if dlg.exec():
+            self.otherData['roomName'] = dlg.textValue()
+
     def _saveFile(self, filename):
+        if 'roomName' not in self.otherData:
+            pass
+            self.roomNameDialog()
         if filename and self.saveLabels(filename):
             self.addRecentFile(filename)
             self.setClean()
