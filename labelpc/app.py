@@ -774,7 +774,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.sourcePath = None
         self.recentFiles = []
         self.maxRecent = 7
-        self.otherData = None
+        self.otherData = {}
         self.zoom_level = 100
         self.fit_window = False
         self.max_points = None
@@ -937,7 +937,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.sourcePath = None
         self.imageData = None
         self.labelFile = None
-        self.otherData = None
+        self.otherData = {}
         self.max_points = None
         self.thickness = None
         self.scale = None
@@ -1040,6 +1040,7 @@ class MainWindow(QtWidgets.QMainWindow):
         return False
 
     def editLabel(self, item=False):
+        # Todo: properly redraw the label in the labelList so that text doesn't overlap
         if item and not isinstance(item, QtWidgets.QListWidgetItem):
             raise TypeError('unsupported type of item: {}'.format(type(item)))
 
@@ -1071,9 +1072,10 @@ class MainWindow(QtWidgets.QMainWindow):
         item.setText(shape.displayName)
         self.setDirty()
         if not self.uniqLabelList.findItemsByLabel(shape.label):
-            item = QtWidgets.QListWidgetItem()
-            item.setData(role=Qt.UserRole, value=shape.label)
+            item = self.uniqLabelList.createItemFromLabel(shape.label)
             self.uniqLabelList.addItem(item)
+            rgb = self._get_rgb_by_label(shape.label)
+            self.uniqLabelList.setItemLabel(item, shape.label, rgb)
 
     def modeSelectionChanged(self):
         items = self.uniqLabelList.selectedItems()
@@ -1424,6 +1426,8 @@ class MainWindow(QtWidgets.QMainWindow):
                     shape.calculateRackExitEdge()
                     if not self.isRackBigEnough(shape):
                         self.remLabels([shape])
+            elif 'door' in text:
+                self.finalizeDoor(shape)
             self.addLabel(shape)
             self.updatePixmap()
             self.actions.editMode.setEnabled(True)
@@ -1437,6 +1441,10 @@ class MainWindow(QtWidgets.QMainWindow):
         else:
             self.canvas.undoLastLine()
             self.canvas.shapesBackups.pop()
+
+    def finalizeDoor(self, door):
+        # Todo: snap door points to nearest wall
+        pass
 
     def beamBreaksRack(self, beam, rack):
         front_dist, back_dist = 2.0, 0.2
@@ -1753,12 +1761,11 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.status(self.tr("Error reading %s") % label_file)
                 return False
             self.otherData = self.labelFile.otherData
-            if 'roomName' not in self.otherData:
-                pass
-                self.roomNameDialog()
         else:
             self.labelFile = None
 
+        if 'roomName' not in self.otherData.keys():
+            self.roomNameDialog()
         if self._config['keep_prev']:
             prev_shapes = self.canvas.shapes
         if self._config['flags']:
@@ -2347,8 +2354,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.otherData['roomName'] = dlg.textValue()
 
     def _saveFile(self, filename):
-        if 'roomName' not in self.otherData:
-            pass
+        if 'roomName' not in self.otherData.keys():
             self.roomNameDialog()
         if filename and self.saveLabels(filename):
             self.addRecentFile(filename)
