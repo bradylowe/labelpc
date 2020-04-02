@@ -94,47 +94,29 @@ def cost_many_dfs(dfs):
     return cost
 
 
-def register_many_dfs(dfs):
-
-    angles, offsets = np.zeros((len(dfs), len(dfs))), np.zeros((len(dfs), len(dfs), 2))
-    costs = 1000000.0 * np.ones((len(dfs), len(dfs)))
-    for i in range(len(dfs)):
-        for j in range(i+1, len(dfs)):
-            angles[i][j], offsets[i][j], costs[i][j] = register_two_dfs(dfs[i], dfs[j])
-
-    print(angles)
-    print(costs.astype(int))
-
-    best = np.argmin(costs, axis=0)
-    best_angles, best_offsets, best_costs = [], [], []
-    for i in range(len(best)):
-        best_angles.append(angles[best[i], i])
-        best_offsets.append(offsets[best[i], i])
-        best_costs.append(costs[best[i], i])
-
-    return best_angles, best_offsets, best_costs
-
-
-def register_two_dfs(ref, reg, door=None):
-    if door is None:
-        door = get_common_door(ref, reg)
-        if door is None:
-            return 0.0, (0.0, 0.0), 1000000.0
+def register_two_dfs(ref, reg, ref_name, reg_name):
     angle_res = 90.0
     best_angle, best_offset, min_cost = None, None, 1000000.0
+    if not np.any(ref['label'] == 'door_%s' % reg_name) or not np.any(reg['label'] == 'door_%s' % ref_name):
+        return best_angle, best_offset, min_cost
     for i in range(int(360.0 / angle_res)):
-        anchor_doors = ref.loc[ref['label'] == door, 'points'].values
+        anchor_doors = ref.loc[ref['label'] == 'door_%s' % reg_name, 'points'].values
+        anchor_orient = np.abs(anchor_doors[0][1] - anchor_doors[0][0])
+        anchor_orient = anchor_orient[0] > anchor_orient[1]
         anchor_door_center = np.average([np.average(d, axis=0) for d in anchor_doors], axis=0)
-        current_doors = reg.loc[reg['label'] == door, 'points'].values
+        current_doors = reg.loc[reg['label'] == 'door_%s' % ref_name, 'points'].values
+        current_orient = np.abs(current_doors[0][1] - current_doors[0][0])
+        current_orient = current_orient[0] > current_orient[1]
         current_door_center = np.average([np.average(d, axis=0) for d in current_doors], axis=0)
-        reg_copy = reg.copy()
-        offset = anchor_door_center - current_door_center
-        reg_copy['points'] += offset
-        cost = intersection(ref, reg_copy)
-        if cost < min_cost:
-            min_cost = cost
-            best_offset = offset
-            best_angle = i * angle_res
+        if anchor_orient == current_orient:
+            offset = anchor_door_center - current_door_center
+            reg['points'] += offset
+            cost = intersection(ref, reg)
+            reg['points'] -= offset
+            if cost < min_cost:
+                min_cost = cost
+                best_offset = offset
+                best_angle = i * angle_res
         rotate_dataframe(reg, angle_res)
     return best_angle, best_offset, min_cost
 
@@ -163,61 +145,45 @@ def get_doors_from_dataframes(dfs):
     return doors
 
 
-def get_other_room_name_from_door_name(door, room_name):
-    names = door.split('_')[1:]
-    if names[0] == room_name:
-        return names[1]
-    else:
-        return names[0]
+def get_room_name_from_door(door):
+    return door.split('_')[1]
 
 
-def register(dfs, names):
+def register(dfs, names, sources):
     # Initially, all rooms are unanchored except for the anchor room
     anchored = np.zeros(len(dfs), dtype=bool)
     anchored[0] = True
     doors = get_doors_from_dataframes(dfs)
-    # Repeatedly loop over the list of rooms and anchor each room to an anchored room it connects to
+    # Loop over all the doors in the anchor room, anchor all connecting rooms first
+    for door in doors[0]:
+        other_room = get_room_name_from_door(door)
+        if other_room not in names:
+            continue
+        other_idx = names.index(other_room)
+        angle, offset, cost = register_two_dfs(dfs[0], dfs[other_idx], names[0], other_room)
+        print('anchoring', names[other_idx], 'to', names[0], 'with cost:', cost)
+        apply_registration_to_dataframe(dfs[other_idx], angle, offset)
+        #apply_registration_to_pointcloud(sources[other_idx], angle, offset)
+        anchored[other_idx] = True
+    # Repeatedly loop over the list of rooms and anchor each room to an anchored room
     count = 0
-    while not anchored.all() and count < 20:
+    while not anchored.all() and count < 10:
         for i in range(len(anchored)):
             if anchored[i]:
                 continue
             # Loop over all the doors in this room
             for door in doors[i]:
-                other_room = get_other_room_name_from_door_name(door, names[i])
+                other_room = get_room_name_from_door(door)
                 anchor_idx = names.index(other_room)
                 # If the room that this room connects to via current door is NOT anchored, skip this door
                 if not anchored[anchor_idx]:
                     continue
-                # Grab the anchored room and the current room we want to connect to the anchored room
-                anchor_room = dfs[anchor_idx]
-                current_room = dfs[i]
-                # Loop over all angles and align the door centers, find the best alignment parameters
-                angle_res = 90.0
-                best_angle, best_offset, min_cost = None, None, 1000000.0
-                for j in range(int(360.0 / angle_res)):
-                    anchor_doors = anchor_room.loc[anchor_room['label'] == door, 'points'].values
-                    anchor_door_orient = np.abs(anchor_doors[0][1] - anchor_doors[0][0])
-                    anchor_door_orient = anchor_door_orient[0] > anchor_door_orient[1]
-                    anchor_door_center = np.average([np.average(d, axis=0) for d in anchor_doors], axis=0)
-                    current_doors = current_room.loc[current_room['label'] == door, 'points'].values
-                    current_door_orient = np.abs(current_doors[0][1] - current_doors[0][0])
-                    current_door_orient = current_door_orient[0] > current_door_orient[1]
-                    current_door_center = np.average([np.average(d, axis=0) for d in current_doors], axis=0)
-                    current_room_copy = current_room.copy()
-                    offset = anchor_door_center - current_door_center
-                    current_room_copy['points'] += offset
-                    cost = intersection(anchor_room, current_room_copy)
-                    if cost < min_cost and anchor_door_orient == current_door_orient:
-                        min_cost = cost
-                        best_offset = offset
-                        best_angle = j * angle_res
-                    rotate_dataframe(current_room, angle_res)
+                angle, offset, cost = register_two_dfs(dfs[anchor_idx], dfs[i], other_room, names[i])
                 # If the cost is low enough, apply the alignment and consider the current door anchored
-                if min_cost < 1000.0:
-                    print('anchoring', names[i], 'to', names[anchor_idx], 'with min cost:', min_cost)
-                    apply_registration_to_dataframe(current_room, best_angle, best_offset)
-                    #apply_registration_to_pointcloud(fname, best_angle, best_offset)
+                if cost < 1000.0:
+                    print('anchoring', names[i], 'to', names[anchor_idx], 'with cost:', cost)
+                    apply_registration_to_dataframe(dfs[i], angle, offset)
+                    #apply_registration_to_pointcloud(sources[i], angle, offset)
                     anchored[i] = True
                     break
         count += 1
@@ -275,40 +241,32 @@ if __name__ == "__main__":
         print('Please supply reference file and one or more register files')
         sys.exit()
 
-    mode = 'all_to_one'  # Register all other rooms to the first room in the list
-    #mode = 'all_to_all'  # Register all rooms to all other rooms (use the lowest cost pairing)
-
     # Load the annotation data into a list of pandas dataframes
-    shapes, sources, names = [], [], []
+    json_data, shapes, sources, names = [], [], [], []
     for fname in sys.argv[1:]:
         with open(fname) as f:
             data = json.load(f)
+            json_data.append(data)
             sources.append(data['sourcePath'])
             names.append(data['roomName'])
-            reg_shapes = pd.DataFrame(columns=['label', 'points'])
+            cur_shapes = pd.DataFrame(columns=['label', 'points'])
             for i, s in enumerate(data['shapes']):
-                reg_shapes.loc[i] = [s['label'], np.array(s['points'])]
-        shapes.append(reg_shapes)
+                cur_shapes.loc[i] = [s['label'], np.array(s['points'])]
+        shapes.append(cur_shapes)
 
-    print(names)
-
+    # Register the rooms (write data to new point cloud files)
+    show_points(shapes)
+    register(shapes, names, sources)
     show_points(shapes)
 
-    # Register the point clouds
-    '''
-    if mode == 'all_to_one':
-        for i in range(1, len(shapes)):
-            angle, offset, cost = register_two_dfs(shapes[0], shapes[i])
-            apply_registration_to_dataframe(shapes[i], angle, offset)
-            apply_registration_to_pointcloud(sources[i], angle, offset)
-    elif mode == 'all_to_all':
-        angles, offsets, _ = register_many_dfs(shapes)
-        for i, (df, angle, offset) in enumerate(zip(shapes, angles, offsets)):
-            if not i:
-                continue
-            apply_registration_to_dataframe(df, angle, offset)
-            apply_registration_to_pointcloud(sources[i], angle, offset)
-    '''
-    register(shapes, names)
-
-    show_points(shapes)
+    # Write the registered data out to new annotation files
+    for i, fname in enumerate(sys.argv[1:]):
+        if not i:
+            continue
+        with open(fname.replace('.json', '_registered.json'), 'w') as f:
+            for j in range(len(shapes[i])):
+                json_data[i]['shapes'][j]['points'] = shapes[i].loc[j, 'points'].tolist()
+            basename, ext = json_data[i]['sourcePath'].split('.')
+            outfile = basename + '_registered.' + ext
+            json_data[i]['sourcePath'] = outfile
+            json.dump(json_data[i], f)
