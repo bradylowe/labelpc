@@ -218,10 +218,9 @@ class PointCloud:
         if filename.endswith('.laz'):
             orig_filename = filename
             filename = 'TEMPORARY.las'
+        if self.las_header.data_format_id < 2:
+            self.las_header.data_format_id = 2
         with File(filename, self.las_header, mode='w') as f:
-            if f.header.data_format_id < 2:
-                f.header.data_format_id = 2
-
             f.x, f.y, f.z = points[['x', 'y', 'z']].values.T
             if 'r' in points:
                 f.red, f.green, f.blue = points[['r', 'g', 'b']].values.T
