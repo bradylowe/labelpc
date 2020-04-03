@@ -1443,8 +1443,30 @@ class MainWindow(QtWidgets.QMainWindow):
             self.canvas.shapesBackups.pop()
 
     def finalizeDoor(self, door):
-        # Todo: snap door points to nearest wall
-        pass
+        walls = self.walls
+        if not walls:
+            return
+        # Grab the wall that is the closest to the door
+        door_points = np.array((self.qpointToPointcloud(door.points[0]), self.qpointToPointcloud(door.points[1])))
+        line_center = np.average(door_points, axis=0)
+        min_dist, closest_wall_line = 1000000.0, None
+        for i in range(1, len(walls.points)):
+            wall_line = [self.qpointToPointcloud(walls.points[i-1]), self.qpointToPointcloud(walls.points[i])]
+            dist = self.pointcloud.distance_to_line(wall_line, line_center)
+            if dist < min_dist:
+                min_dist = dist
+                closest_wall_line = wall_line
+        wall_points = np.array(closest_wall_line)
+        # Find the points on the wall closest to the door points
+        n_hat = wall_points[1] - wall_points[0]
+        n_hat = n_hat / np.sqrt(np.dot(n_hat, n_hat))
+        offset = door_points[0] - wall_points[0]
+        distance = np.dot(offset, n_hat)
+        p1 = wall_points[0] + distance * n_hat
+        offset = door_points[1] - closest_wall_line[0]
+        distance = np.dot(offset, n_hat)
+        p2 = wall_points[0] + distance * n_hat
+        door.points = [self.pointcloudToQpoint(p1), self.pointcloudToQpoint(p2)]
 
     def beamBreaksRack(self, beam, rack):
         front_dist, back_dist = 2.0, 0.2
