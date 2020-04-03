@@ -566,7 +566,8 @@ class PointCloud:
         else:
             return self.points.loc[keep][['x', 'y']].values
 
-    def distance_to_line(self, line, point):
+    @staticmethod
+    def distance_to_line(line, point):
         p1, p2 = line
         dx, dy = p2[0] - p1[0], p2[1] - p1[1]
         num = np.abs(dy * point[0] - dx * point[1] + p2[0] * p1[1] - p2[1] * p1[0])
@@ -575,7 +576,7 @@ class PointCloud:
 
     def get_points_under_line(self, line, delta=0.01):
         keep = np.zeros(len(self.points), dtype=bool)
-        for i, p in self.points:
+        for i, p in enumerate(self.points[['x', 'y']].values):
             if self.distance_to_line(line, p) < delta:
                 keep[i] = True
         return np.arange(len(self.points))[keep]
