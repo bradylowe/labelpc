@@ -605,3 +605,28 @@ class PointCloud:
         filtered = scores > np.percentile(scores, 50)
         points = points[filtered]
         return np.array((points.min(axis=0)[:2], points.max(axis=0)[:2]))
+
+    def reset_floor(self, align_z=False):
+        # Grab the floor points
+        subset = np.random.choice(len(self.points), min(100000, len(self.points)))
+        points = self.points.loc[subset][['x', 'y', 'z']].values
+        vg = VoxelGrid(points, (10000.0, 10000.0, 0.02))
+        floor_points = points[vg.indices(vg.fullest())]
+        floor_centroid = floor_points.mean(axis=0)
+        self.points['z'] -= floor_centroid[2]
+        if align_z:
+            dx, dy, dz = floor_points.max(axis=0) - floor_points.min(axis=0)
+            if dx or dy:
+                centroid = points.mean(axis=0)
+                self.points[['x', 'y', 'z']] -= centroid
+                if dx:
+                    theta = -np.arctan(dz / dx)
+                    c, s = np.cos(theta), np.sin(theta)
+                    rot = np.array(((c, s), (-s, c)))
+                    self.points[['x', 'z']] = np.dot(self.points[['x', 'z']].values, rot)
+                if dy:
+                    theta = -np.arctan(dz / dy)
+                    c, s = np.cos(theta), np.sin(theta)
+                    rot = np.array(((c, s), (-s, c)))
+                    self.points[['y', 'z']] = np.dot(self.points[['y', 'z']].values, rot)
+                self.points[['x', 'y', 'z']] += centroid

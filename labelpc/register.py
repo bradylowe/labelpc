@@ -7,41 +7,6 @@ import matplotlib.pyplot as plt
 from labelpc.pointcloud.PointCloud import PointCloud
 
 
-def find_in_dataframe(df, query='door', indices=False):
-    if indices:
-        return df.index[df['label'].str.contains(query)].tolist()
-    else:
-        return df['label'].str.contains(query)
-
-
-# Doors must have common name theme. (DOOR before DOCK, DOOR1 before DOOR2)
-def get_common_door(ref, reg):
-    ref_doors = ref.loc[ref['label'].str.contains('door')]
-    for label in ref_doors['label'].unique():
-        doors = reg.loc[reg['label'].str.contains(label)]
-        if len(doors):
-            return label
-
-
-def distance(p1, p2):
-    return np.sqrt(np.dot(p1 - p2, p1 - p2))
-
-
-# Return the average distance from each door in one scan to the nearest door in the other scan
-def door_loss(door, ref, reg):
-    total, count = 0.0, 0
-    for ref_points in ref.loc[ref['label'] == door, 'points']:
-        min_dist = 1000000.0
-        for reg_points in reg.loc[reg['label'] == door, 'points']:
-            ref_d, reg_d = np.abs(ref_points[1] - ref_points[0]), np.abs(reg_points[1] - reg_points[0])
-            if (ref_d[0] > ref_d[1]) == (reg_d[0] > reg_d[1]):
-                ref_c, reg_c = ref_points.mean(axis=0), reg_points.mean(axis=0)
-                min_dist = min(min_dist, distance(ref_c, reg_c))
-        total += min_dist
-        count += 1
-    return total / count
-
-
 def rotate_dataframe(df, angle, center=None):
     if center is None:
         center = np.zeros(2)
@@ -76,24 +41,6 @@ def intersection(df1, df2):
     return max(0, xB - xA + 1) * max(0, yB - yA + 1)
 
 
-# Measure how well two dataframes are registered together, 0.0 is perfect score
-def cost_two_dfs(df1, df2, door=None):
-    if door is None:
-        door = get_common_door(df1, df2)
-    return door_loss(door, df1, df2) * (1.0 + intersection(df1, df2))
-
-
-# Measure how well many dataframes are registered together, 0.0 is perfect score
-def cost_many_dfs(dfs):
-    cost = 0.0
-    for df1 in dfs:
-        for df2 in dfs:
-            if df1 is df2:
-                continue
-            cost += cost_two_dfs(df1, df2)
-    return cost
-
-
 def register_two_dfs(ref, reg, ref_name, reg_name):
     angle_res = 90.0
     best_angle, best_offset, min_cost = None, None, 1000000.0
@@ -121,23 +68,6 @@ def register_two_dfs(ref, reg, ref_name, reg_name):
     return best_angle, best_offset, min_cost
 
 
-def get_names_from_dataframes(dfs):
-    names = []
-    for df in dfs:
-        doors = df.loc[df['label'].str.contains('door')]
-        possible_names = doors[0].split('_')[1:]
-        for name in possible_names:
-            found_name = True
-            for door in doors:
-                if name not in door.split('_')[1:]:
-                    found_name = False
-                    break
-            if found_name:
-                names.append(name)
-                break
-    return names
-
-
 def get_doors_from_dataframes(dfs):
     doors = []
     for df in dfs:
@@ -163,7 +93,7 @@ def register(dfs, names, sources):
         angle, offset, cost = register_two_dfs(dfs[0], dfs[other_idx], names[0], other_room)
         print('anchoring', names[other_idx], 'to', names[0], 'with cost:', cost)
         apply_registration_to_dataframe(dfs[other_idx], angle, offset)
-        #apply_registration_to_pointcloud(sources[other_idx], angle, offset)
+        apply_registration_to_pointcloud(sources[other_idx], angle, offset)
         anchored[other_idx] = True
     # Repeatedly loop over the list of rooms and anchor each room to an anchored room
     count = 0
@@ -183,7 +113,7 @@ def register(dfs, names, sources):
                 if cost < 1000.0:
                     print('anchoring', names[i], 'to', names[anchor_idx], 'with cost:', cost)
                     apply_registration_to_dataframe(dfs[i], angle, offset)
-                    #apply_registration_to_pointcloud(sources[i], angle, offset)
+                    apply_registration_to_pointcloud(sources[i], angle, offset)
                     anchored[i] = True
                     break
         count += 1
@@ -210,22 +140,15 @@ def show_points(dfs):
     plt.show()
 
 
-# Write the info in the dataframe out to json file
-def save_dataframe(df):
-    # Todo: complete this function
-    # Write the data back to the json file (register file)
-    pass
-
-
 # Take the results of the registration and apply them to the original point clouds
 def apply_registration_to_pointcloud(filename, angle, offset):
-    # Todo: complete this function
     # Open the point cloud, rotate it, offset it, and write it back to file
     basename, ext = filename.split('.')
     outfile = basename + '_registered.' + ext
     pc = PointCloud(filename, render=False)
     pc.rotate_xy(angle)
     pc.translate_xy(offset)
+    pc.reset_floor()
     pc.write(outfile, overwrite=True)
 
 
