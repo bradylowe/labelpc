@@ -49,11 +49,9 @@ from labelpc.pointcloud.Voxelize import VoxelGrid
 #   --- Brady:
 #   Create annotations for individual slices ??? (floor, lights, evap. coils)
 #   Interpolate beam positions inside wall bounds or canvas bounds
-#   Make different shapes for i-beam and square beam
 #   --- Austin:
 #   //DONE Add distance threshold for snap functions to config file (snapToCenter, snapToCorner, rackSep, rackSplit)
 #   //DONE Draw crosshairs on beams that span the canvas (toggle on/off)
-#   Color one side of rectangle a different color based on group ID
 #   //DONE Toggle individual annotations on/off (turn off SHOWALL)
 #   Create icons for buttons
 #   Create shortcuts
@@ -1040,7 +1038,6 @@ class MainWindow(QtWidgets.QMainWindow):
         return False
 
     def editLabel(self, item=False):
-        # Todo: properly redraw the label in the labelList so that text doesn't overlap
         if item and not isinstance(item, QtWidgets.QListWidgetItem):
             raise TypeError('unsupported type of item: {}'.format(type(item)))
 
@@ -1069,13 +1066,16 @@ class MainWindow(QtWidgets.QMainWindow):
         shape.label = text
         shape.flags = flags
         shape.group_id = group_id
-        item.setText(shape.displayName)
+        index = self.labelList.get_index_from_item(item)
+        self.labelList.takeItem(index)
+        self.addLabel(shape)
         self.setDirty()
         if not self.uniqLabelList.findItemsByLabel(shape.label):
             item = self.uniqLabelList.createItemFromLabel(shape.label)
             self.uniqLabelList.addItem(item)
             rgb = self._get_rgb_by_label(shape.label)
             self.uniqLabelList.setItemLabel(item, shape.label, rgb)
+        del self.labelList.itemsToShapes[index]
 
     def modeSelectionChanged(self):
         items = self.uniqLabelList.selectedItems()
