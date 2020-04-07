@@ -1734,6 +1734,7 @@ class MainWindow(QtWidgets.QMainWindow):
         # Create images from numpy arrays
         self.imageData = []
         self.progressBar.reset()
+        # Todo: show progress in progress bar here? investigate why it slows things down
         for m in tqdm(bitmaps, desc='Building image data from bitmaps'):
             img = PIL.Image.fromarray(np.asarray(m, dtype="uint8"))
             buff = BytesIO()
@@ -1898,7 +1899,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 beam.crosshairs = True
             else:
                 beam.crosshairs = False
-        self.updatePixmap()
+        self.updatePixmap(store=False)
 
     def interpolateBeamPositions(self):
         """
@@ -1914,6 +1915,7 @@ class MainWindow(QtWidgets.QMainWindow):
             y.append(beam.points[0].y())
         self.remLabels(beams)
         x, y = np.unique(x, axis=0), np.unique(y, axis=0)
+        # Todo: get this beam interpolation function working
         dist_x = x[1] - x[0]
         dist_y = y[1] - y[0]
         # temp_x = x[0]
@@ -1925,6 +1927,7 @@ class MainWindow(QtWidgets.QMainWindow):
         # while temp_y < self.canvas.pixmap.height():
         #     temp_y += dist_y
         #     test_y.append(temp_y)
+        # Todo: update progress bar while interpolating beams
         # for cur_x in test_x:
         #     for cur_y in test_y:
         #         new_shape = Shape(label='beam', shape_type='point')
@@ -2153,6 +2156,7 @@ class MainWindow(QtWidgets.QMainWindow):
         resolution = 0.05
         if rack.orient % 2:
             dims = np.flip(dims)
+        # Define and fill the Hough accumulator
         from collections import defaultdict
         shift = (np.array(dims) / resolution / 2.0).astype(int)
         votes = defaultdict(int)
@@ -2160,6 +2164,7 @@ class MainWindow(QtWidgets.QMainWindow):
             idx = (p / resolution).astype(int)
             for direction in [np.array((-1, -1)), np.array((-1, 1)), np.array((1, 1)), np.array((1, -1))]:
                 votes[tuple(idx + direction * shift)] += 1
+        # Find the peak
         max_votes = 0
         for key, value in votes.items():
             if value > max_votes:
