@@ -13,6 +13,8 @@ class Room:
     def __init__(self, json_filename):
         self.json_file = json_filename
         self.annotations = []
+        self.angle = 0.0
+        self.offset = np.array((0.0, 0.0))
         with open(self.json_file) as f:
             self.json_data = json.load(f)
             self.source = self.json_data['sourcePath']
@@ -20,7 +22,7 @@ class Room:
             self.annotations = pd.DataFrame(columns=['label', 'points'])
             for i, s in enumerate(self.json_data['shapes']):
                 self.annotations.loc[i] = [s['label'], np.array(s['points'])]
-        self.pointcloud = PointCloud(self.source, render=False, max_points=10000000000)
+        self.pointcloud = PointCloud(self.source, render=False, max_points=1000000)
 
     def rotate_annotations(self, angle, center=None):
         if center is None:
@@ -42,6 +44,7 @@ class Room:
         return min_p[0], min_p[1], max_p[0], max_p[1]
 
     def apply_registration(self, angle, offset):
+        self.angle, self.offset = angle, offset
         self.rotate_annotations(angle)
         self.annotations['points'] += offset
         self.pointcloud.rotate_xy(angle)
@@ -62,8 +65,11 @@ class Room:
     def save_pointcloud(self):
         basename, ext = self.source.split('.')
         outfile = basename + '_registered.' + ext
-        self.pointcloud.reset_floor()
-        self.pointcloud.write(outfile, overwrite=True)
+        full_cloud = PointCloud(self.source, max_points=1000000000, render=False)
+        full_cloud.rotate_xy(self.angle)
+        full_cloud.translate_xy(self.offset)
+        full_cloud.reset_floor()
+        full_cloud.write(outfile, overwrite=True)
 
     @property
     def doors(self):
@@ -75,6 +81,7 @@ def intersection(room1, room2):
     box_a = room1.annotation_bounds()
     box_b = room2.annotation_bounds()
     # Find number of points of each shape inside the other
+    '''
     points_inside = 0
     for shape in room1.annotations['points']:
         for p in shape:
@@ -84,6 +91,9 @@ def intersection(room1, room2):
         for p in shape:
             if box_a[0] < p[0] < box_a[2] and box_a[1] < p[1] < box_a[3]:
                 points_inside += 1
+    '''
+    points_inside = room1.pointcloud.in_box_2d(((box_b[0], box_b[1]), (box_b[2], box_b[3]))).sum()
+    points_inside += room2.pointcloud.in_box_2d(((box_a[0], box_a[1]), (box_a[2], box_a[3]))).sum()
     # determine the (x, y)-coordinates of the intersection rectangle
     xA = max(box_a[0], box_b[0])
     yA = max(box_a[1], box_b[1])
@@ -94,10 +104,11 @@ def intersection(room1, room2):
 
 
 def register_two_rooms(anchor_room, other_room):
-    angle_res = 0.5
-    best_angle, best_offset, min_cost = None, None, 1000000.0
+    angle_res = 0.05
+    best_angle, best_offset, min_cost = 0.0, np.array((0.0, 0.0)), np.inf
     if not np.any(anchor_room.annotations['label'] == 'door_%s' % other_room.name) or \
             not np.any(other_room.annotations['label'] == 'door_%s' % anchor_room.name):
+        print('No matching doors for %s and %s' % (anchor_room.name, other_room.name))
         return best_angle, best_offset, min_cost
     for i in range(int(360.0 / angle_res)):
         anchor_doors = anchor_room.annotations.loc[anchor_room.annotations['label'] == 'door_%s' % other_room.name, 'points'].values
@@ -112,7 +123,7 @@ def register_two_rooms(anchor_room, other_room):
             # Try moving the rooms toward and away from each other by 7 centimeters to account for wall thickness
             for offset_sign in [-1, 1]:
                 offset = anchor_door_center - current_door_center  # Line doors up on top of each other
-                offset[anchor_orient] += offset_sign * 0.07        # Shift doors away from each other by 7 cm
+                offset[anchor_orient] += offset_sign * 0.27        # Shift doors away from each other by 7 cm
                 other_room.annotations['points'] += offset
                 cost = intersection(anchor_room, other_room)
                 other_room.annotations['points'] -= offset
@@ -138,6 +149,8 @@ def register(rooms):
     # Initially, all rooms are unanchored except for the anchor room
     anchored = defaultdict(bool)
     anchored[rooms[0].name] = True
+    for room in rooms[1:]:
+        anchored[room.name] = False
     # Loop over all the doors in the anchor room, anchor all connecting rooms first
     for door in rooms[0].doors:
         other_room_name = get_room_name_from_door(door)
@@ -147,7 +160,7 @@ def register(rooms):
             print('anchoring', room.name, 'to', rooms[0].name, 'with cost:', cost)
             room.apply_registration(angle, offset)
             anchored[room.name] = True
-    # Repeatedly loop over the list of rooms and anchor all rooms one by one to one another
+    # Repeatedly loop over the list of rooms and anchor all rooms one by one to one another (max 10 iterations)
     count = 0
     while not np.all(anchored) and count < 10:
         # Find an anchored room
@@ -162,12 +175,10 @@ def register(rooms):
                 other_room = find_room_by_name(other_room_name, rooms)
                 if other_room is not None:
                     angle, offset, cost = register_two_rooms(anchored_room, other_room)
-                    # If the cost is low enough, apply the alignment and consider the current door anchored
-                    if cost < 1000.0:
-                        print('anchoring', other_room_name, 'to', anchored_room.name, 'with cost:', cost)
-                        other_room.apply_registration(angle, offset)
-                        anchored[other_room_name] = True
-                        break
+                    print('anchoring', other_room_name, 'to', anchored_room.name, 'with cost:', cost)
+                    other_room.apply_registration(angle, offset)
+                    anchored[other_room_name] = True
+                    break
         count += 1
 
 
