@@ -123,7 +123,7 @@ def register_two_rooms(anchor_room, other_room):
             # Try moving the rooms toward and away from each other by 7 centimeters to account for wall thickness
             for offset_sign in [-1, 1]:
                 offset = anchor_door_center - current_door_center  # Line doors up on top of each other
-                offset[anchor_orient] += offset_sign * 0.27        # Shift doors away from each other by 7 cm
+                offset[anchor_orient] += offset_sign * 0.07        # Shift doors away from each other by 7 cm
                 other_room.annotations['points'] += offset
                 cost = intersection(anchor_room, other_room)
                 other_room.annotations['points'] -= offset
