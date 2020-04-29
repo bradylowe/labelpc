@@ -2280,7 +2280,7 @@ class MainWindow(QtWidgets.QMainWindow):
         if not self.mayContinue():
             return
         path = osp.dirname(str(self.filename)) if self.filename else '.'
-        formats = ['*.las', '*.laz', '*.pcd', '*.ply', '*.pts']
+        formats = ['*.las', '*.laz', '*.pcd', '*.ply', '*.xyz', '*.pts']
         filters = self.tr("Point Cloud files (%s)") % ' '.join(
             formats + ['*%s' % LabelFile.suffix])
         filename = QtWidgets.QFileDialog.getOpenFileName(
