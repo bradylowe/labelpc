@@ -1,4 +1,5 @@
 from laspy.file import File
+from laspy.header import Header
 import open3d as o3d
 import numpy as np
 import pandas as pd
@@ -214,10 +215,16 @@ class PointCloud:
             return
         print('Wrote %d points to %s' % (len(points), filename))
 
+    def __write_laz_file(self, filename, points):
+        self.__write_las_file('TEMPORARY.las', points)
+        self.__zip_las('TEMPORARY.las', filename)
+        os.system('rm TEMPORARY.las')
+
     def __write_las_file(self, filename, points):
-        if filename.endswith('.laz'):
-            orig_filename = filename
-            filename = 'TEMPORARY.las'
+        if self.las_header is None:
+            self.las_header = Header()
+            self.las_header.x_offset, self.las_header.y_offset, self.las_header.z_offset = 0.0, 0.0, 0.0
+            self.las_header.x_scale, self.las_header.y_scale, self.las_header.z_scale = 0.0001, 0.0001, 0.0001
         if self.las_header.data_format_id < 2:
             self.las_header.data_format_id = 2
         with File(filename, self.las_header, mode='w') as f:
@@ -230,9 +237,6 @@ class PointCloud:
                 f.user_data = points['user_data'].values
             if 'intensity' in points:
                 f.intensity = points['intensity'].values
-        if filename == 'TEMPORARY.las':
-            self.__zip_las('TEMPORARY.las', orig_filename)
-            os.system('rm TEMPORARY.las')
 
     def __write_xyz_file(self, filename, points):
         points.to_csv(filename)
