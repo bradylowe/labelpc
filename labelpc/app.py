@@ -1123,6 +1123,8 @@ class MainWindow(QtWidgets.QMainWindow):
 
     # React to canvas signals.
     def shapeSelectionChanged(self, selected_shapes):
+        if selected_shapes is None:
+            return
         self._noSelectionSlot = True
         for shape in self.canvas.selectedShapes:
             shape.selected = False
@@ -1967,6 +1969,7 @@ class MainWindow(QtWidgets.QMainWindow):
         """
         Break a rack using the mouse. [CTRL + right mouse button]
         """
+        rack = None
         for item, shape in self.labelList.itemsToShapes:
             if 'rack' in shape.label and shape.containsPoint(pos):
                 rack = shape
