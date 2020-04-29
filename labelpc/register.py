@@ -31,7 +31,7 @@ class Room:
         c, s = np.cos(theta), np.sin(theta)
         rot = np.array(((c, s), (-s, c)))
         self.annotations['points'] -= center
-        for idx, row in self.annotations.iterrows():
+        for ridx, row in self.annotations.iterrows():
             row['points'] = np.dot(row['points'], rot)
         self.annotations['points'] += center
 
@@ -81,19 +81,7 @@ def intersection(room1, room2):
     box_a = room1.annotation_bounds()
     box_b = room2.annotation_bounds()
     # Find number of points of each shape inside the other
-    '''
-    points_inside = 0
-    for shape in room1.annotations['points']:
-        for p in shape:
-            if box_b[0] < p[0] < box_b[2] and box_b[1] < p[1] < box_b[3]:
-                points_inside += 1
-    for shape in room2.annotations['points']:
-        for p in shape:
-            if box_a[0] < p[0] < box_a[2] and box_a[1] < p[1] < box_a[3]:
-                points_inside += 1
-    '''
-    points_inside = room1.pointcloud.in_box_2d(((box_b[0], box_b[1]), (box_b[2], box_b[3]))).sum()
-    points_inside += room2.pointcloud.in_box_2d(((box_a[0], box_a[1]), (box_a[2], box_a[3]))).sum()
+    points_inside = 0.0
     # determine the (x, y)-coordinates of the intersection rectangle
     xA = max(box_a[0], box_b[0])
     yA = max(box_a[1], box_b[1])
@@ -103,29 +91,87 @@ def intersection(room1, room2):
     return max(0, xB - xA + 1) * max(0, yB - yA + 1) * (1.0 + points_inside)
 
 
+def wall_cost(room1, room2):
+    walls1 = room1.annotations.loc[room1.annotations['label'] == 'walls', 'points'].values
+    walls2 = room2.annotations.loc[room2.annotations['label'] == 'walls', 'points'].values
+    costs = []
+
+    def calculate_rho_and_theta(line):
+        diff = line[1] - line[0]
+        if diff[0]:
+            theta_m = np.arctan(diff[1] / diff[0])
+        else:
+            theta_m = np.pi / 2.0
+        rho = (line[0][1] - np.tan(theta_m) * line[0][0]) * np.cos(theta_m)
+        return rho, theta_m + np.pi / 2.0
+
+    for i in range(1, len(walls1)):
+        max_d = 5
+        line1 = (walls1[i-1], walls1[i])
+        rho1, theta1 = calculate_rho_and_theta(line1)
+        for j in range(1, len(walls2)):
+            line2 = (walls2[j-1], walls2[j])
+            rho2, theta2 = calculate_rho_and_theta(line2)
+            d_theta = abs(np.degrees(theta1 - theta2))
+            d_rho = abs(rho1 - rho2)
+            if (d_theta < max_d or 180 - max_d < d_theta < 180 + max_d or 360 - max_d < d_theta) and d_rho < 1.0:
+                while d_theta > 10:
+                    d_theta -= 180
+                d_theta = abs(d_theta) / max_d
+                costs.append(d_rho + d_theta)
+
+    if len(costs):
+        return np.average(costs)
+    else:
+        return 0.0
+
+
+def doors_loss(doors1, doors2):
+    loss = 0.0
+    for d1 in doors1:
+        # Find the distance between this door (d1) and the closest door in doors2
+        min_loss = np.inf
+        for d2 in doors2:
+            diff = d1.mean(axis=0) - d2.mean(axis=0)
+            min_loss = min(min_loss, np.sqrt(np.dot(diff, diff)))
+        loss += min_loss
+    return loss
+
+
 def register_two_rooms(anchor_room, other_room):
-    angle_res = 0.05
+    angle_res = 1.
     best_angle, best_offset, min_cost = 0.0, np.array((0.0, 0.0)), np.inf
     if not np.any(anchor_room.annotations['label'] == 'door_%s' % other_room.name) or \
             not np.any(other_room.annotations['label'] == 'door_%s' % anchor_room.name):
         print('No matching doors for %s and %s' % (anchor_room.name, other_room.name))
         return best_angle, best_offset, min_cost
     for i in range(int(360.0 / angle_res)):
-        anchor_doors = anchor_room.annotations.loc[anchor_room.annotations['label'] == 'door_%s' % other_room.name, 'points'].values
+        # Grab the anchor door points, calculate their orientation and center
+        anchor_doors_mask = anchor_room.annotations['label'] == 'door_%s' % other_room.name
+        anchor_doors = anchor_room.annotations.loc[anchor_doors_mask, 'points'].values
         anchor_orient = np.abs(anchor_doors[0][1] - anchor_doors[0][0])
         anchor_orient = anchor_orient[0] > anchor_orient[1]
         anchor_door_center = np.average([np.average(d, axis=0) for d in anchor_doors], axis=0)
-        current_doors = other_room.annotations.loc[other_room.annotations['label'] == 'door_%s' % anchor_room.name, 'points'].values
-        current_orient = np.abs(current_doors[0][1] - current_doors[0][0])
-        current_orient = current_orient[0] > current_orient[1]
-        current_door_center = np.average([np.average(d, axis=0) for d in current_doors], axis=0)
-        if anchor_orient == current_orient:
+        # Grab the anchor door points, calculate their orientation and center
+        other_doors_mask = other_room.annotations['label'] == 'door_%s' % anchor_room.name
+        other_doors = other_room.annotations.loc[other_doors_mask, 'points'].values
+        other_orient = np.abs(other_doors[0][1] - other_doors[0][0])
+        other_orient = other_orient[0] > other_orient[1]
+        other_door_center = np.average([np.average(d, axis=0) for d in other_doors], axis=0)
+        if anchor_orient == other_orient:
+            # Line the door centers up on top of each other and calculate door loss
+            offset = anchor_door_center - other_door_center
+            other_room.annotations['points'] += offset
+            loss = doors_loss(anchor_doors, other_doors)
+            other_room.annotations['points'] -= offset
             # Try moving the rooms toward and away from each other by 7 centimeters to account for wall thickness
             for offset_sign in [-1, 1]:
-                offset = anchor_door_center - current_door_center  # Line doors up on top of each other
-                offset[anchor_orient] += offset_sign * 0.07        # Shift doors away from each other by 7 cm
+                # Shift doors 7 cm to account for wall thickness
+                offset[anchor_orient] += offset_sign * 0.07
                 other_room.annotations['points'] += offset
-                cost = intersection(anchor_room, other_room)
+                # Calculate total cost of this configuration
+                #cost = loss * (1.0 + intersection(anchor_room, other_room)) * (1.0 + wall_cost(anchor_room, other_room))
+                cost = loss * (1.0 + intersection(anchor_room, other_room))
                 other_room.annotations['points'] -= offset
                 if cost < min_cost:
                     min_cost = cost
@@ -203,6 +249,16 @@ def show_points(rooms):
     plt.show()
 
 
+def merge_annotations(rooms):
+    with open('merged.json', 'w') as f:
+        all_json_data = {'version': '4.2.6', 'flags': {}, 'roomName': 'all', 'shapes': []}
+        for room in rooms:
+            for i in range(len(room.annotations)):
+                room.json_data['shapes'][i]['points'] = room.annotations.loc[i, 'points'].tolist()
+                all_json_data['shapes'].extend(room.json_data['shapes'])
+        json.dump(all_json_data, f)
+
+
 if __name__ == "__main__":
 
     if len(sys.argv) < 3:
@@ -218,6 +274,10 @@ if __name__ == "__main__":
     show_points(rooms)
     register(rooms)
     show_points(rooms)
+    '''
     for room in rooms[1:]:
         room.save()
+    '''
+
+    merge_annotations(rooms)
 
