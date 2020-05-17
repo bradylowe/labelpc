@@ -8,7 +8,6 @@ decorator==4.4.1
 defusedxml==0.6.0
 entrypoints==0.3
 ezdxf==0.10.4
--e git+https://github.com/lineageanalytics/PointBluePython.git@cdcf4918fed75b7362f2a2d15ba4da6dcaa314eb#egg=filterpc&subdirectory=Gui/filterpc
 gast==0.2.2
 google-pasta==0.1.7
 grpcio==1.23.0
@@ -26,7 +25,6 @@ jsonschema==3.2.0
 jupyter-client==5.3.4
 jupyter-core==4.6.1
 kiwisolver==1.1.0
--e git+https://github.com/bradylowe/labelpc.git@1a2fbdb28d71c5d9a678404102c2b7f55728a17c#egg=labelpc
 laspy==1.5.1
 Markdown==3.1.1
 MarkupSafe==1.1.1
