@@ -10,12 +10,15 @@ A short demonstration video can be viewed [here](https://youtu.be/jpjvWzdVLkk).
 Below are some short clips from the demo video.
 
 ![](images/labelpc_scroll.gif)
+
 This GIF shows the user scrolling up and down through horizontal slices of the data.
 
 ![](images/labelpc_annotation.gif)
+
 This GIF shows the user annotating racks and poles in the point cloud.
 
 ![](images/labelpc_3d.gif)
+
 This GIF shows the user checking the quality of the 2D annotations by looking at the 3D cloud.
 
 ## Installation
