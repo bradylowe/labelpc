@@ -1,7 +1,6 @@
 
 import numpy as np
 from collections import defaultdict
-import hdbscan as hdb
 from tqdm import trange, tqdm
 
 
@@ -294,66 +293,4 @@ class VoxelGrid:
                 if key[axis-2] == center[axis-2] and key[axis-1] == center[axis-1]:
                     strip.append(key)
         return strip
-
-    def cluster(self, voxels=None, return_noise=False, min_cluster_size=30, min_samples=5):
-        """
-        Cluster the given voxel in the given grid using HDBSCAN and return the clustered point indices. If no
-        voxel index is given, perform clustering for all occupied voxels. If noise is True, then return the
-        points that were not part of any cluster as a separate array.
-        """
-        if voxels is None:
-            voxels = self.occupied()
-        elif not len(voxels):
-            return []
-        elif not isinstance(voxels[0], tuple):
-            voxels = [voxels]
-
-        count = 0
-        clusters = []
-        noise = []
-        not_enough = 0
-        for voxel in voxels:
-            count += 1
-            indices = np.array(self.indices(voxel))
-            # If we have at least 50 points in the voxel, then cluster the points
-            if len(indices) > 50:
-                if not count % 10:
-                    print('working on voxel ', voxel, '[%d/%d]' % (count, len(voxels)))
-                clusterer = hdb.HDBSCAN(min_cluster_size=min_cluster_size, min_samples=min_samples)
-                labels = clusterer.fit_predict(self.points[indices])
-                # Record which points are in which cluster
-                if return_noise:
-                    noise.extend(indices[labels == -1])
-                for l in range(0, np.max(labels) + 1):
-                    clusters.append(indices[labels == l])
-            else:
-                not_enough += 1
-
-        print(not_enough, 'out of', len(voxels), 'voxels didn\'t have enough points to be clustered')
-
-        if return_noise:
-            return clusters, noise
-        else:
-            return clusters
-
-    def curvature(self, neighbors=0):
-        """
-        Calculate the curvature for every point in the input point cloud using the voxel grid as a way to
-        identify neighbors. If neighbors is equal to 2, then the two voxels to the left, right, up, down, etc
-        directions will be used for the computation around each voxel.
-        """
-        curvature = np.empty(len(self.points))
-        for voxel in self.occupied():
-            if neighbors:
-                indices = self.indices(self.neighbors(voxel, overlap=neighbors), merge=True)
-            else:
-                indices = self.indices(voxel)
-
-            eigen = feat.eigenvalues_single(self.points[indices], self.center(voxel))
-            if eigen[0] > 0.0:
-                curvature[indices] = 3.0 * eigen[0] / np.sum(eigen)
-            else:
-                curvature[indices] = 0.0
-
-        return curvature
 
