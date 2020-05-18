@@ -27,3 +27,7 @@ First, you can install the requirements by running `pip install -r requirements.
 You can install labelpc with `pip install -e .` after installing the requirements.
 
 Once installed, open the program by running `labelpc` in a terminal.
+
+## User's manual
+
+A user's manual can be found in the base directory in the form of a pdf.
