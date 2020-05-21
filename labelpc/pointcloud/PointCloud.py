@@ -502,6 +502,22 @@ class PointCloud:
         else:
             return np.ones(len(self.points), dtype=bool)
 
+    def normals(self, points=None, k=100, r=0.35, render=False):
+        """
+        This function takes in a set of points (or uses the currently rendered points) and calculates the surface
+        normals using pptk built-in functions which use PCA method. The number of neighbors (k) or the distance
+        scale (r) can be changed to affect the resolution of the computation. If render=True, then the results
+        will be rendered upon completion.
+        """
+        if points is None:
+            points = self.points.loc[self.showing.bools][['x', 'y', 'z']].values
+
+        n = np.abs(pptk.estimate_normals(points, k, r))
+        if render and self.viewer_is_ready():
+            self.viewer.attributes(n)
+
+        return n
+
     def add_points(self, points):
         """
         Append a pandas dataframe of points to the current list of points. The pandas DataFrame
