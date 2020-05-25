@@ -98,7 +98,8 @@ class PointCloud:
                 mask = Mask(f.header.point_records_count, True)
             new_df = pd.DataFrame(np.array((f.x, f.y, f.z)).T[mask.bools])
             new_df.columns = ['x', 'y', 'z']
-            if f.header.data_format_id >= 2:
+            print(f.header.data_format_id)
+            if f.header.data_format_id in [2, 3, 5, 7, 8]:
                 rgb = pd.DataFrame(np.array((f.red, f.green, f.blue), dtype='int').T[mask.bools])
                 rgb.columns = ['r', 'g', 'b']
                 new_df = new_df.join(rgb)
