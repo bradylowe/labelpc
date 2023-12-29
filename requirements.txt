@@ -74,7 +74,7 @@ tqdm==4.35.0
 traitlets==4.3.3
 wcwidth==0.1.8
 webencodings==0.5.1
-Werkzeug==0.15.5
+Werkzeug==2.3.8
 widgetsnbextension==3.5.1
 wrapt==1.11.2
 zipp==1.0.0
