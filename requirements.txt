@@ -69,7 +69,7 @@ six==1.12.0
 termcolor==1.1.0
 terminado==0.8.3
 testpath==0.4.4
-tornado==6.0.3
+tornado==6.3.3
 tqdm==4.35.0
 traitlets==4.3.3
 wcwidth==0.1.8
