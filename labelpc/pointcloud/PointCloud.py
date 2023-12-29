@@ -98,7 +98,6 @@ class PointCloud:
                 mask = Mask(f.header.point_records_count, True)
             new_df = pd.DataFrame(np.array((f.x, f.y, f.z)).T[mask.bools])
             new_df.columns = ['x', 'y', 'z']
-            print(f.header.data_format_id)
             if f.header.data_format_id in [2, 3, 5, 7, 8]:
                 rgb = pd.DataFrame(np.array((f.red, f.green, f.blue), dtype='int').T[mask.bools])
                 rgb.columns = ['r', 'g', 'b']
@@ -108,7 +107,7 @@ class PointCloud:
                 new_df['user_data'] = f.user_data[mask.bools].copy()
             if np.sum(f.intensity):
                 new_df['intensity'] = f.intensity[mask.bools].copy()
-        self.points = self.points.append(new_df, sort=False)
+        self.points = pd.concat((self.points, new_df), ignore_index=True)
         if filename == 'TEMPORARY.las':
             os.system('rm TEMPORARY.las')
 
