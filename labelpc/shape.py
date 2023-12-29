@@ -291,16 +291,16 @@ class Shape(object):
 
     def calculateRackExitEdge(self):
         center = (self.points[0] + self.points[1]) / 2.0
-        p1 = QtCore.QPoint(center.x(), center.y())
-        p2 = QtCore.QPoint(center.x(), center.y())
+        p1 = QtCore.QPoint(int(center.x()), int(center.y()))
+        p2 = QtCore.QPoint(int(center.x()), int(center.y()))
         if self.orient == 0:
-            p2.setY(self.points[1].y())
+            p2.setY(int(self.points[1].y()))
         elif self.orient == 1:
-            p2.setX(self.points[1].x())
+            p2.setX(int(self.points[1].x()))
         elif self.orient == 2:
-            p2.setY(self.points[0].y())
+            p2.setY(int(self.points[0].y()))
         elif self.orient == 3:
-            p2.setX(self.points[0].x())
+            p2.setX(int(self.points[0].x()))
         self.lines = [QtCore.QLine(p1, p2)]
 
     @property

@@ -1570,10 +1570,12 @@ class MainWindow(QtWidgets.QMainWindow):
         self.setScroll(orientation, value)
 
     def setScroll(self, orientation, value):
+        value = int(value)
         self.scrollBars[orientation].setValue(value)
         self.scroll_values[orientation][self.filename] = value
 
     def setZoom(self, value):
+        value = int(value)
         self.actions.fitWidth.setChecked(False)
         self.actions.fitWindow.setChecked(False)
         self.zoomMode = self.MANUAL_ZOOM
@@ -1721,7 +1723,7 @@ class MainWindow(QtWidgets.QMainWindow):
         size = len(sliceList)
         for v in tqdm(slices.all(), desc='Building bitmaps from point cloud'):
             index = sliceList.index(v)
-            percent = (index / size) * 100
+            percent = int((index / size) * 100)
             self.progressBar.setValue(percent)
             if not len(slices.indices(v)):
                 continue
@@ -2102,7 +2104,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.status(self.tr('Predicting pallets for all racks'))
         for rack in self.racks:
             index = self.racks.index(rack)
-            percent = (index / size) * 100
+            percent = int((index / size) * 100)
             self.progressBar.setValue(percent)
             self.predictPalletsFromRack(rack)
         self.setDirty()

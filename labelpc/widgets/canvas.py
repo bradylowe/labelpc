@@ -304,8 +304,8 @@ class Canvas(QtWidgets.QWidget):
         self.movingShape = True  # Save changes
 
     def getEdges(self, shape):
-        x, y = shape.points[0].x(), shape.points[0].y()
-        w, h = self.pixmap.width(), self.pixmap.height()
+        x, y = int(shape.points[0].x()), int(shape.points[0].y())
+        w, h = int(self.pixmap.width()), int(self.pixmap.height())
         x1 = QtCore.QPoint(0, y)
         x2 = QtCore.QPoint(w, y)
         y1 = QtCore.QPoint(x, 0)
@@ -459,6 +459,7 @@ class Canvas(QtWidgets.QWidget):
         y1 = rect.y() - point.y()
         x2 = (rect.x() + rect.width() - 1) - point.x()
         y2 = (rect.y() + rect.height() - 1) - point.y()
+        x1, y1, x2, y2 = int(x1), int(y1), int(x2), int(y2),
         self.offsets = QtCore.QPoint(x1, y1), QtCore.QPoint(x2, y2)
 
     def boundedMoveVertex(self, pos):
@@ -573,8 +574,8 @@ class Canvas(QtWidgets.QWidget):
         area = super(Canvas, self).size()
         w, h = self.pixmap.width() * s, self.pixmap.height() * s
         aw, ah = area.width(), area.height()
-        x = (aw - w) / (2 * s) if aw > w else 0
-        y = (ah - h) / (2 * s) if ah > h else 0
+        x = int((aw - w) / (2 * s)) if aw > w else 0
+        y = int((ah - h) / (2 * s)) if ah > h else 0
         return QtCore.QPoint(x, y)
 
     def outOfPixmap(self, p):
@@ -654,7 +655,7 @@ class Canvas(QtWidgets.QWidget):
             if 0 <= ua <= 1 and 0 <= ub <= 1:
                 x = x1 + ua * (x2 - x1)
                 y = y1 + ua * (y2 - y1)
-                m = QtCore.QPoint((x3 + x4) / 2, (y3 + y4) / 2)
+                m = QtCore.QPoint(int((x3 + x4) / 2), int((y3 + y4) / 2))
                 d = labelpc.utils.distance(m - QtCore.QPoint(x2, y2))
                 yield d, i, (x, y)
 
