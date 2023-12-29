@@ -1,10 +1,20 @@
 from laspy.file import File
 from laspy.header import Header
-import open3d as o3d
 import numpy as np
 import pandas as pd
-import pptk
 import os
+
+try:
+    import pptk
+except ImportError:
+    print('`pptk` not installed, cannot use PPTK viewer')
+    pptk = None
+
+try:
+    import open3d as o3d
+except ImportError:
+    print('`open3d` not installed, can only use "las" and "txt" point cloud file types')
+    o3d = None
 
 from labelpc.pointcloud.Mask import Mask
 from labelpc.pointcloud.Voxelize import VoxelGrid
@@ -303,6 +313,10 @@ class PointCloud:
             return
 
         self.showing.set(mask.bools)
+
+        # If PPTK is not installed, then do not attempt to load
+        if pptk is None:
+            return
 
         if self.viewer_is_ready():
             self.viewer.clear()
