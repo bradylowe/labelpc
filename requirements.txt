@@ -10,7 +10,7 @@ comm==0.2.0
 ConfigArgParse==1.7
 contourpy==1.2.0
 cycler==0.12.1
-dash==2.14.2
+dash==2.15.0
 dash-core-components==2.0.0
 dash-html-components==2.0.0
 dash-table==5.0.0
