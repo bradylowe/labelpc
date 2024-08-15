@@ -784,6 +784,6 @@ class Canvas(QtWidgets.QWidget):
 
     def resetState(self):
         self.restoreCursor()
-        self.pixmap = None
+        self.pixmap = QtGui.QPixmap()
         self.shapesBackups = []
         self.update()
