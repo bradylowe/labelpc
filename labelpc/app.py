@@ -826,7 +826,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.actions.undo.setEnabled(not drawing)
         self.actions.delete.setEnabled(not drawing)
 
-    def toggleDrawMode(self, edit=True, createMode='polygon', showPopup=True):
+    def toggleDrawMode(self, edit=True, createMode='rectangle', showPopup=True):
         self._config['display_label_popup'] = showPopup
         self.canvas.setEditing(edit)
         self.canvas.createMode = createMode
@@ -1058,23 +1058,14 @@ class MainWindow(QtWidgets.QMainWindow):
                 label=label,
                 shape_type=shape_type,
                 group_id=group_id,
-                orient=orient
+                orient=orient,
+                flags=flags
             )
             if shape.group_id is not None:
                 self._cur_group = max(self._cur_group, shape.group_id)
             for p in points:
                 shape.addPoint(self.map_to_qpoint(p))
             shape.close()
-
-            default_flags = {}
-            if self._config['label_flags']:
-                for pattern, keys in self._config['label_flags'].items():
-                    if re.match(pattern, label):
-                        for key in keys:
-                            default_flags[key] = False
-            shape.flags = default_flags
-            # Todo: figure out if we need flags or not
-            #shape.flags.update(flags)
 
             s.append(shape)
         self.loadShapes(s)
@@ -1346,10 +1337,15 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def loadLabelsFile(self, filename):
         self.status(self.tr("Loading %s...") % osp.basename(str(filename)))
+
+        # Construct path
         label_file = osp.splitext(filename)[0] + '.json'
         if self.output_dir:
             label_file_without_path = osp.basename(label_file)
             label_file = osp.join(self.output_dir, label_file_without_path)
+        
+        # Open the label file if it exists
+        self.label_file = None
         if QtCore.QFile.exists(label_file) and \
                 LabelFile.is_label_file(label_file):
             try:
@@ -1365,17 +1361,18 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.status(self.tr("Error reading %s") % label_file)
                 return False
             self.metadata = self.label_file.otherData
-        else:
-            self.label_file = None
 
         if self._config['keep_prev']:
             prev_shapes = self.canvas.shapes
         if self._config['flags']:
             self.loadFlags({k: False for k in self._config['flags']})
+        
+        # Load the shapes
         if self.label_file:
             self.loadLabels(self.label_file.shapes)
             if self.label_file.flags is not None:
                 self.loadFlags(self.label_file.flags)
+        
         if self._config['keep_prev'] and not self.labelList.shapes:
             self.loadShapes(prev_shapes, replace=False)
             self.setDirty()
