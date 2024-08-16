@@ -20,20 +20,18 @@ CURSOR_GRAB = QtCore.Qt.OpenHandCursor
 
 class Canvas(QtWidgets.QWidget):
 
+    allowed_labels = ['polygon', 'rectangle', 'circle', 'line', 'point', 'linestrip']
+
     zoomRequest = QtCore.Signal(int, QtCore.QPoint)
     scrollRequest = QtCore.Signal(int, int)
     nextSliceRequest = QtCore.Signal()
     lastSliceRequest = QtCore.Signal()
     newShape = QtCore.Signal()
-    breakRack = QtCore.Signal(QtCore.QPointF)
     selectionChanged = QtCore.Signal(list)
     shapeMoved = QtCore.Signal()
     drawingPolygon = QtCore.Signal(bool)
     edgeSelected = QtCore.Signal(bool, object)
     vertexSelected = QtCore.Signal(bool)
-    rackChanged = QtCore.Signal(Shape)
-    beamChanged = QtCore.Signal(Shape)
-    rotateRack = QtCore.Signal()
 
     CREATE, EDIT = 0, 1
 
@@ -58,12 +56,12 @@ class Canvas(QtWidgets.QWidget):
         self.current = None
         self.selectedShapes = []  # save the selected shapes here
         self.selectedShapesCopy = []
+
         # self.line represents:
         #   - createMode == 'polygon': edge from last point to current
         #   - createMode == 'rectangle': diagonal line of the rectangle
         #   - createMode == 'line': the line
         #   - createMode == 'point': the point
-
         self.line = Shape()
         self.prevPoint = QtCore.QPoint()
         self.prevMovePoint = QtCore.QPoint()
@@ -99,7 +97,7 @@ class Canvas(QtWidgets.QWidget):
 
     @createMode.setter
     def createMode(self, value):
-        if value not in ['polygon', 'rectangle', 'circle', 'line', 'point', 'linestrip']:
+        if value not in self.allowed_labels:
             raise ValueError('Unsupported createMode: %s' % value)
         self._createMode = value
 
@@ -377,11 +375,6 @@ class Canvas(QtWidgets.QWidget):
                 self.repaint()
         elif ev.button() == QtCore.Qt.LeftButton and self.selectedShapes:
             self.overrideCursor(CURSOR_GRAB)
-        elif ev.button() == QtCore.Qt.LeftButton and self.selectedVertex():
-            if 'rack' in self.hShape.label:
-                self.rackChanged.emit(self.hShape)
-            elif self.hShape.label == 'beam':
-                self.beamChanged.emit(self.hShape)
 
         if self.movingShape and self.hShape:
             index = self.shapes.index(self.hShape)
@@ -488,8 +481,6 @@ class Canvas(QtWidgets.QWidget):
         if dp:
             for shape in shapes:
                 shape.moveBy(dp)
-                if 'rack' in shape.label:
-                    shape.calculateRackExitEdge()
             self.prevPoint = pos
             return True
         return False

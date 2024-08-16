@@ -92,7 +92,7 @@ class MainWindow(QtWidgets.QMainWindow):
         # Main widgets and related state.
         self.labelDialog = LabelDialog(
             parent=self,
-            labels=self._config['labels'],
+            labels=Canvas.allowed_labels,
             sort_labels=self._config['sort_labels'],
             show_text_field=self._config['show_label_text_field'],
             completion=self._config['label_completion'],
@@ -929,14 +929,7 @@ class MainWindow(QtWidgets.QMainWindow):
             return
 
         self.annotationMode = label
-        if label in ['pole', 'beam', 'I_beam']:
-            self.toggleDrawMode(False, createMode='point', showPopup=False)
-        elif 'rack' in label or label == 'noise':
-            self.toggleDrawMode(False, createMode='rectangle', showPopup=False)
-        elif label == 'door':
-            self.toggleDrawMode(False, createMode='line')
-        elif label == 'walls':
-            self.toggleDrawMode(False, createMode='polygon', showPopup=False)
+        self.toggleDrawMode(False, createMode=label, showPopup=label=='line')
 
     def fileSearchChanged(self):
         self.importDirImages(
@@ -1059,29 +1052,19 @@ class MainWindow(QtWidgets.QMainWindow):
             shape_type = shape['shape_type']
             flags = shape['flags']
             group_id = shape.get('group_id')
-            rack_id = shape.get('rack_id')
             orient = shape.get('orient')
 
             shape = Shape(
                 label=label,
                 shape_type=shape_type,
                 group_id=group_id,
-                rack_id=rack_id,
                 orient=orient
             )
             if shape.group_id is not None:
                 self._cur_group = max(self._cur_group, shape.group_id)
-            if shape.rack_id is not None:
-                self._cur_rack = max(self._cur_rack, shape.rack_id)
             for p in points:
                 shape.addPoint(self.map_to_qpoint(p))
             shape.close()
-            if 'beam' in shape.label:
-                shape.lines = self.canvas.getEdges(shape)
-                if shape.label == 'I_beam':
-                    shape.point_type = Shape.P_SQUARE
-            elif 'rack' in shape.label:
-                shape.calculateRackExitEdge()
 
             default_flags = {}
             if self._config['label_flags']:
@@ -1582,8 +1565,6 @@ class MainWindow(QtWidgets.QMainWindow):
         return filename
 
     def _saveFile(self, filename):
-        if 'roomName' not in self.metadata.keys():
-            self.roomNameDialog()
         if filename and self.saveLabels(filename):
             self.addRecentFile(filename)
             self.setClean()

@@ -13,7 +13,8 @@ snap_corner_thresh: 0.5
 
 flags: null
 label_flags: null
-labels: [walls, pole, beam, door, select_rack, drive_in_rack, extra_deep_rack, noise, I_beam]
+#labels: [walls, pole, beam, door, select_rack, drive_in_rack, extra_deep_rack, noise, I_beam]
+labels: [polygon, linestrip, rectangle, point]
 file_search: null
 sort_labels: true
 validate_label: null
@@ -88,7 +89,6 @@ shortcuts:
   create_wall: null
   create_walls: null
   create_linestrip: null
-  highlight_slice: null
   display_polygon: null
   edit_polygon: Ctrl+J
   delete_polygon: Delete
