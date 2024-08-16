@@ -62,6 +62,8 @@ class MainWindow(QtWidgets.QMainWindow):
 
     FIT_WINDOW, FIT_WIDTH, MANUAL_ZOOM = 0, 1, 2
 
+    _cur_group = 0
+
     def __init__(
         self,
         config=None,
@@ -786,8 +788,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self.label_file = None
         self.metadata = {}
 
-        self.scale = None
-        self.offset = None
         self.annotationMode = None
         self.sliceIndices = None
         self.canvas.resetState()
@@ -1066,7 +1066,7 @@ class MainWindow(QtWidgets.QMainWindow):
             if shape.group_id is not None:
                 self._cur_group = max(self._cur_group, shape.group_id)
             for p in points:
-                shape.addPoint(self.map_to_qpoint(p))
+                shape.addPoint(self.scale_to_image(p))
             shape.close()
 
             s.append(shape)
@@ -1083,7 +1083,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def create_labels_from_boxes(self, boxes):
         def box_to_points(box):
             x1, y1, x2, y2 = box['box']
-            return QtCore.QRectF(x1, y1, x2 - x1, y2 - y1)
+            return (x1, y1), (x2, y2)
         
         s = []
         for page in boxes:
@@ -1091,9 +1091,9 @@ class MainWindow(QtWidgets.QMainWindow):
                 label = box['type']
                 points = box_to_points(box)
                 shape_type = 'rectangle'
-                flags = {'text': box['text'], 'confidence': box['confidence'], 'page': box['page']}
+                flags = {'box': box}
                 group_id = 0
-                orient = box['crop_orientation']
+                orient = box['crop_orientation']['value']  # confidence also available
 
                 shape = Shape(
                     label=label,
@@ -1105,10 +1105,11 @@ class MainWindow(QtWidgets.QMainWindow):
                 if shape.group_id is not None:
                     self._cur_group = max(self._cur_group, shape.group_id)
                 for p in points:
-                    shape.addPoint(self.map_to_qpoint(p))
+                    shape.addPoint(self.scale_to_image(p))
                 shape.close()
 
                 s.append(shape)
+        return s
 
     def loadFlags(self, flags):
         self.flag_widget.clear()
@@ -1124,7 +1125,7 @@ class MainWindow(QtWidgets.QMainWindow):
         def format_shape(s):
             return dict(
                 label=s.label.encode('utf-8') if PY2 else s.label,
-                points=[self.map_from_qpoint(p) for p in s.points],
+                points=[self.scale_to_relative(p) for p in s.points],
                 group_id=s.group_id,
                 orient=s.orient,
                 shape_type=s.shape_type,
@@ -1335,6 +1336,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.setZoomAndScroll()
         self.canvas.setEnabled(True)
 
+        self.add_shapes_from_pages()
+
         self.paintCanvas()
         self.addRecentFile(self.filename)
         self.toggleActions()
@@ -1473,13 +1476,15 @@ class MainWindow(QtWidgets.QMainWindow):
     def rotateShapes(self, angle):
         print('Rotate shapes not implemented')
 
-    def map_from_qpoint(self, p):
-        return (p.x() * self.scale + self.offset.x(),
-                (self.canvas.pixmap.height() - p.y()) * self.scale + self.offset.y())
+    def scale_to_relative(self, p):
+        return (
+            p.x() / self.canvas.pixmap.width(),
+            p.y() / self.canvas.pixmap.height(),
+        )
 
-    def map_to_qpoint(self, p):
-        x = (p[0] - self.offset.x()) / self.scale
-        y = self.canvas.pixmap.height() - ((p[1] - self.offset.y()) / self.scale)
+    def scale_to_image(self, p):
+        x = p[0] * self.canvas.pixmap.width()
+        y = p[1] * self.canvas.pixmap.height()
         return QtCore.QPointF(x, y)
 
     # User Dialogs #

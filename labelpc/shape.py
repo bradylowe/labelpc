@@ -279,9 +279,9 @@ class Shape(object):
     def displayName(self):
         name = self.label
         if self.group_id is not None:
-            name += " (%d)" % self.group_id
+            name += f" ({self.group_id})"
         if self.orient is not None:
-            name += " (%d)" % self.orient
+            name += f" ({self.orient})"
         return name
 
     def __len__(self):
