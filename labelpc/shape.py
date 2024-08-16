@@ -39,18 +39,16 @@ class Shape(object):
     scale = 1.0
 
     def __init__(self, label=None, line_color=None, shape_type=None,
-                 flags=None, group_id=None, orient=None, rack_id=None):
+                 flags=None, group_id=None, orient=None):
         self.label = label
         self.group_id = group_id
         self.orient = orient
-        self.rack_id = rack_id
         self.points = []
         self.lines = []
         self.fill = False
         self.selected = False
         self.shape_type = shape_type
         self.flags = flags
-        self.crosshairs = False
 
         self._highlightIndex = None
         self._highlightMode = self.NEAR_VERTEX
@@ -135,11 +133,8 @@ class Shape(object):
                 if len(self.points) == 2:
                     rectangle = self.getRectFromLine(*self.points)
                     line_path.addRect(rectangle)
-                if self.label == 'pallet':
-                    self._vertex_fill_color = self.vertex_fill_color
-                else:
-                    for i in range(len(self.points)):
-                        self.drawVertex(vrtx_path, i)
+                for i in range(len(self.points)):
+                    self.drawVertex(vrtx_path, i)
             elif self.shape_type == "circle":
                 assert len(self.points) in [1, 2]
                 if len(self.points) == 2:
@@ -166,13 +161,6 @@ class Shape(object):
             painter.drawPath(line_path)
             painter.drawPath(vrtx_path)
             painter.fillPath(vrtx_path, self._vertex_fill_color)
-            if self.crosshairs:
-                r, g, b = self.line_color.red(), self.line_color.green(), self.line_color.blue()
-                self.line_color = QtGui.QColor(r, g, b, 20)
-                for line in self.lines:
-                    painter.drawLine(line)
-            elif self.label and 'rack' in self.label and self.lines:
-                painter.drawLine(self.lines[0])
             if self.fill:
                 color = self.select_fill_color \
                     if self.selected else self.fill_color
@@ -197,8 +185,6 @@ class Shape(object):
             assert False, "unsupported vertex shape"
 
     def nearestVertex(self, point, epsilon):
-        if self.label == 'pallet':
-            return
         min_distance = float('inf')
         min_i = None
         for i, p in enumerate(self.points):
@@ -289,27 +275,11 @@ class Shape(object):
     def copy(self):
         return copy.deepcopy(self)
 
-    def calculateRackExitEdge(self):
-        center = (self.points[0] + self.points[1]) / 2.0
-        p1 = QtCore.QPoint(int(center.x()), int(center.y()))
-        p2 = QtCore.QPoint(int(center.x()), int(center.y()))
-        if self.orient == 0:
-            p2.setY(int(self.points[1].y()))
-        elif self.orient == 1:
-            p2.setX(int(self.points[1].x()))
-        elif self.orient == 2:
-            p2.setY(int(self.points[0].y()))
-        elif self.orient == 3:
-            p2.setX(int(self.points[0].x()))
-        self.lines = [QtCore.QLine(p1, p2)]
-
     @property
     def displayName(self):
         name = self.label
         if self.group_id is not None:
             name += " (%d)" % self.group_id
-        if self.rack_id is not None:
-            name += " (%d)" % self.rack_id
         if self.orient is not None:
             name += " (%d)" % self.orient
         return name

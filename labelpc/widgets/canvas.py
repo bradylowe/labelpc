@@ -36,7 +36,7 @@ class Canvas(QtWidgets.QWidget):
     CREATE, EDIT = 0, 1
 
     # polygon, rectangle, line, or point
-    _createMode = 'polygon'
+    _createMode = 'rectangle'
 
     _fill_drawing = False
 
@@ -363,9 +363,6 @@ class Canvas(QtWidgets.QWidget):
         else:
             pos = self.transformPos(ev.posF())
         if ev.button() == QtCore.Qt.RightButton:
-            if int(ev.modifiers()) == QtCore.Qt.ControlModifier:
-                self.breakRack.emit(pos)
-                return
             menu = self.menus[len(self.selectedShapesCopy) > 0]
             self.restoreCursor()
             if not menu.exec_(self.mapToGlobal(ev.pos())) \
@@ -702,8 +699,6 @@ class Canvas(QtWidgets.QWidget):
             self.update()
         elif key == QtCore.Qt.Key_Return and self.canCloseShape():
             self.finalise()
-        elif key == QtCore.Qt.Key_R:
-            self.rotateRack.emit()
 
     def setLastLabel(self, text, flags):
         assert text
