@@ -7,7 +7,6 @@ import re
 import webbrowser
 from tqdm import tqdm, trange
 
-from pdf2image import convert_from_path
 import PIL.Image
 from io import BytesIO
 import numpy as np
@@ -38,6 +37,9 @@ from labelpc.widgets import LabelQListWidget
 from labelpc.widgets import ToolBar
 from labelpc.widgets import UniqueLabelQListWidget
 from labelpc.widgets import ZoomWidget
+
+from thoughtengine.ocr.utils import load_images_from_files
+from thoughtengine.ocr.doctr_ocr import run_ocr_doctr
 
 # TODO:
 #   --- BYU students:
@@ -1069,6 +1071,44 @@ class MainWindow(QtWidgets.QMainWindow):
 
             s.append(shape)
         self.loadShapes(s)
+    
+    def add_shapes_from_ocr(self, img):
+        results = run_ocr_doctr(img)
+        new_shapes = self.create_labels_from_boxes(results)
+        self.loadShapes(new_shapes)
+    
+    def add_shapes_from_pages(self):
+        self.add_shapes_from_ocr(self.img_data)
+
+    def create_labels_from_boxes(self, boxes):
+        def box_to_points(box):
+            x1, y1, x2, y2 = box['box']
+            return QtCore.QRectF(x1, y1, x2 - x1, y2 - y1)
+        
+        s = []
+        for page in boxes:
+            for box in page:
+                label = box['type']
+                points = box_to_points(box)
+                shape_type = 'rectangle'
+                flags = {'text': box['text'], 'confidence': box['confidence'], 'page': box['page']}
+                group_id = 0
+                orient = box['crop_orientation']
+
+                shape = Shape(
+                    label=label,
+                    shape_type=shape_type,
+                    group_id=group_id,
+                    orient=orient,
+                    flags=flags
+                )
+                if shape.group_id is not None:
+                    self._cur_group = max(self._cur_group, shape.group_id)
+                for p in points:
+                    shape.addPoint(self.map_to_qpoint(p))
+                shape.close()
+
+                s.append(shape)
 
     def loadFlags(self, flags):
         self.flag_widget.clear()
@@ -1086,7 +1126,6 @@ class MainWindow(QtWidgets.QMainWindow):
                 label=s.label.encode('utf-8') if PY2 else s.label,
                 points=[self.map_from_qpoint(p) for p in s.points],
                 group_id=s.group_id,
-                rack_id=s.rack_id,
                 orient=s.orient,
                 shape_type=s.shape_type,
                 flags=s.flags
@@ -1272,10 +1311,7 @@ class MainWindow(QtWidgets.QMainWindow):
         #item.setCheckState(Qt.Checked if item.checkState() == Qt.Unchecked else Qt.Unchecked)
     
     def load_images_from_file(self, filename):
-        if filename.lower().endswith('.pdf'):
-            images = convert_from_path(filename)
-        else:
-            images = [PIL.Image.open(filename)]
+        images = load_images_from_files(filename)
         return [self.pil_to_image_data(img) for img in images]
 
     def loadFile(self, filename):
