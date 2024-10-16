@@ -1,11 +1,14 @@
-/.cache/
-/.pytest_cache/
+/.cache
+/.pytest_cache
 
-/build/
-/dist/
-/*.egg-info/
+/build
+/dist
+/*.egg-info
 
 *.py[cdo]
 
 .DS_Store
-.idea/
+.idea
+.git
+
+venv*
