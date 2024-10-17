@@ -24,10 +24,8 @@ This GIF shows the user checking the quality of the 2D annotations by looking at
 
 ## Installation
 
-First, you can install the requirements by running `pip install -r requirements.txt`.
-You can install labelpc with `pip install -e .` after installing the requirements.
-
-Once installed, open the program by running `labelpc` in a terminal.
+- You can install labelpc with `pip install -e .`
+- Once installed, run the app with `labelpc`
 
 ## User's manual
 
