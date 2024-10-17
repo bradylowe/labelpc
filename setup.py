@@ -30,14 +30,14 @@ def get_install_requires():
         'imgviz>=0.11.0',
         'laspy>=1.7.1,<2.0.0',
         'matplotlib',
-        'numpy',
+        'numpy>=1.22.0',
         'pandas',
-        'Pillow>=2.8.0',
+        'Pillow>=10.3.0',
         'pywin32==306',
-        'PyYAML',
+        'PyYAML>=5.4',
         'qtpy',
         'termcolor',
-        'tqdm',
+        'tqdm>=4.66.3',
     ]
 
     # Find python binding for qt with priority:
