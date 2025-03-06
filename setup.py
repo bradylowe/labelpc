@@ -28,12 +28,16 @@ def get_install_requires():
 
     install_requires = [
         'imgviz>=0.11.0',
+        'laspy>=1.7.1,<2.0.0',
         'matplotlib',
-        'numpy',
-        'Pillow>=2.8.0',
-        'PyYAML',
+        'numpy>=1.22.0',
+        'pandas',
+        'Pillow>=10.3.0',
+        'pywin32==306',
+        'PyYAML>=5.4',
         'qtpy',
         'termcolor',
+        'tqdm>=4.66.3',
     ]
 
     # Find python binding for qt with priority:
@@ -113,15 +117,15 @@ def main():
         name='labelpc',
         version=version,
         packages=find_packages(exclude=['github2pypi']),
-        description='Image Polygonal Annotation with Python',
+        description='Point Cloud Polygonal Annotation with Python',
         long_description=get_long_description(),
         long_description_content_type='text/markdown',
-        author='Kentaro Wada',
-        author_email='www.kentaro.wada@gmail.com',
+        author='Brady Lowe',
+        author_email='ilovephysics1729@gmail.com',
         url='https://github.com/bradylowe/labelpc',
         install_requires=get_install_requires(),
         license='GPLv3',
-        keywords='Image Annotation, Machine Learning',
+        keywords='Annotation, Point Cloud, Lidar, Machine Learning',
         classifiers=[
             'Development Status :: 5 - Production/Stable',
             'Intended Audience :: Developers',

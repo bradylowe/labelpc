@@ -7,7 +7,5 @@ This tool was developed by myself (Brady Lowe) and a collaborator Austin Carey (
 
 ## Installation
 
-First, you can install the requirements by running `pip install -r requirements.txt`.
-You can install labelpc with `pip install -e .` after installing the requirements.
-
-Once installed, open the program by running `labelpc` in a terminal.
+- You can install labelpc with `pip install -e .`
+- Once installed, run the app with `labelpc`
