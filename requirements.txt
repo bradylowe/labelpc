@@ -19,7 +19,7 @@ exceptiongroup==1.2.0
 executing==2.0.1
 fastjsonschema==2.19.1
 Flask==3.0.0
-fonttools==4.47.0
+fonttools==4.61.0
 idna==3.6
 imgviz==1.7.4
 importlib-metadata==7.0.1
