@@ -36,6 +36,14 @@ The project may delete most of the existing implementation and still be healthy 
 - Preserve historical `master` before destructive rebuild work lands there.
 - Use a development branch as the integration target while the rebuild direction is still evolving.
 
+## Team Automation
+
+The repository should grow a small agent-team operating model under `docs/roles/`. The first coordinator is the Project Manager, described in `docs/roles/PROJECT_MANAGER.md`.
+
+The intended automation pattern is a single scheduled PM run, likely hourly during active development. The PM reads the roadmap, role docs, priorities, run logs, and blockers; checks the current repo state; delegates bounded next steps to specialist agents when appropriate; records a concise run log; and escalates to Brady when human judgment is needed.
+
+This should start as documentation and status files before becoming a live cron workflow. The PM loop should prove it can coordinate work without creating duplicate branches, noisy updates, or unbounded agent activity.
+
 ## MVP 0: Architecture Proof
 
 Goal: prove the chosen stack can launch, load a point cloud, render it interactively, and persist basic scan state before building every annotation tool.

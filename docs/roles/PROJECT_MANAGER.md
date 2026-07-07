@@ -67,8 +67,12 @@ The Project Manager should define and maintain metrics in these categories:
 ## Working Cadence
 
 - Keep a current milestone checklist.
+- Run as the coordinator for scheduled development loops, such as an hourly cron during active development.
 - Before a milestone starts, confirm scope, exit criteria, test plan, and major risks.
 - During implementation, track decisions and scope changes.
+- Check status files, run logs, branches, pull requests, tests, and blockers when tooling is available.
+- Prompt specialist agents only with bounded next actions, clear stop conditions, and explicit handoff expectations.
+- Escalate to Brady when a blocker needs product judgment, release approval, destructive repo changes, or external access.
 - Before a milestone is marked complete, verify tests, docs, performance notes, and known limitations.
 - After each milestone, summarize what was learned and what should change in the roadmap.
 
@@ -127,3 +131,4 @@ For the MVP 0 architecture proof, the Project Manager should track:
 - A recommended development branch strategy before rebuild PRs begin landing.
 - A recommendation for freezing the current `master` state, currently version `4.2.6`, before destructive rebuild work is merged there.
 - An initial dependency and legacy-code audit plan.
+- The initial team automation operating model in `docs/roles/TEAM_AUTOMATION.md`.
