@@ -14,7 +14,27 @@ The non-negotiable goal is responsiveness with large point-cloud datasets. The a
 - Expect at least a frontend, backend/app engine, and database.
 - Store scan metadata, annotation state, shapes, and session data durably.
 - Keep local-first operation possible while leaving room for distributed workflows.
-- Use pull requests for review before merging into `master`.
+- Use pull requests for review.
+- Prefer merging rebuild PRs into a development/integration branch until the first release cycle is ready.
+- Before overwriting or radically replacing `master`, freeze the current historical `master` state with a branch or tag. The current package version is `4.2.6`, so a freeze name like `v4.2.6` would preserve the old Qt-era codebase before the rebuild.
+- Plan a major-version upgrade for the rebuild because compatibility and architecture are expected to change substantially.
+
+## Rebuild and Legacy Code Policy
+
+The rebuild does not need to preserve the current codebase. Existing files, dependencies, packaging, examples, and application modules are disposable if they block the future architecture.
+
+If any inherited code remains, it must be treated as untrusted legacy code until it is reviewed, modernized, tested, and vetted for vulnerabilities. The same applies to dependencies: no existing dependency should be assumed safe or appropriate just because it is already in the repository.
+
+The project may delete most of the existing implementation and still be healthy as long as it preserves the roadmap, product context, release history, and any deliberately retained assets or reference behavior.
+
+### Legacy Retention Rules
+
+- Keep old code only when it clearly accelerates the new architecture.
+- Re-vet retained dependencies for security, maintenance status, license fit, and compatibility with containerized deployment.
+- Replace or remove vulnerable dependencies where practical.
+- Avoid carrying old Qt assumptions into the new app unless they are chosen intentionally.
+- Preserve historical `master` before destructive rebuild work lands there.
+- Use a development branch as the integration target while the rebuild direction is still evolving.
 
 ## MVP 0: Architecture Proof
 

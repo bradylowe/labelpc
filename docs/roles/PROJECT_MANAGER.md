@@ -16,6 +16,9 @@ The Project Manager is not the final product authority and does not replace engi
 - Watch for architectural drift away from the core goal: responsive large point-cloud annotation.
 - Ensure documentation stays current as the product direction evolves.
 - Keep pull requests reviewable by encouraging small, coherent changes.
+- Protect release history by ensuring the current `master` branch is frozen with a branch or tag before destructive rebuild work lands on `master`.
+- Keep rebuild work flowing through a development/integration branch until the team is ready to start a formal release cycle.
+- Treat inherited code and dependencies as legacy assets that must be explicitly retained, reviewed, modernized, and security-vetted.
 - Surface blockers, ambiguities, and tradeoffs early.
 
 ## Core Metrics
@@ -47,6 +50,9 @@ The Project Manager should define and maintain metrics in these categories:
 - Manual performance test results on representative point clouds.
 - Known bugs by severity.
 - Flaky test count.
+- Open dependency vulnerabilities by severity.
+- Legacy modules retained without current tests.
+- Retained dependencies without a security/maintenance review.
 
 ### Delivery
 
@@ -55,6 +61,8 @@ The Project Manager should define and maintain metrics in these categories:
 - Open architectural decisions.
 - Unresolved product questions.
 - Documentation freshness.
+- Release branch/tag readiness.
+- Development branch readiness for merge into `master`.
 
 ## Working Cadence
 
@@ -84,6 +92,9 @@ The Project Manager should coordinate with:
 - Keep the data model durable enough for future distributed use, even while the first deployment is local.
 - Treat rendering performance, persistence, and test coverage as product features.
 - Do not lock the project into Qt, web-native rendering, streaming, Rust, Python, C++, or JavaScript before evidence supports the choice.
+- Prefer deleting legacy code over preserving it by inertia.
+- Any retained legacy code must earn its place through review, tests, and vulnerability checks.
+- A major-version upgrade is expected for the rebuild because compatibility and architecture may change substantially.
 
 ## Definition of Done Checklist
 
@@ -95,6 +106,9 @@ For each milestone or major feature, verify:
 - Performance-sensitive behavior has at least basic measurements.
 - Database changes include migration or initialization notes.
 - Import/export changes include sample data or examples.
+- Retained legacy code has been reviewed and has an owner.
+- Retained dependencies have been checked for known vulnerabilities and maintenance status.
+- Any dependency vulnerability is fixed, documented with a mitigation plan, or intentionally accepted by the team.
 - Known limitations are documented.
 - The roadmap is updated if scope or direction changed.
 
@@ -110,3 +124,6 @@ For the MVP 0 architecture proof, the Project Manager should track:
 - Scan metadata persistence.
 - Performance/status metrics visible to developers.
 - Test fixtures and manual performance sample data.
+- A recommended development branch strategy before rebuild PRs begin landing.
+- A recommendation for freezing the current `master` state, currently version `4.2.6`, before destructive rebuild work is merged there.
+- An initial dependency and legacy-code audit plan.
