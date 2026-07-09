@@ -4,6 +4,8 @@
 
 LabelPC is being redesigned as a responsive point-cloud annotation and analysis app. The future architecture is intentionally open: the project may become web-native, keep a Qt engine behind a browser stream for a while, move heavy calculations into Rust/C++/Python workers, or split responsibilities across multiple containers.
 
+The product is about more than drawing shapes on point clouds. A point cloud is the spatial evidence layer. An annotation is a flexible domain object layered onto that evidence: it may represent a physical thing, a region, a measurement, a class of similar objects, an inspection note, a hypothesis, a workflow state, or an arbitrary nested bundle of user-defined information. Most annotations will have some physical representation that overlaps the point cloud, but the physical representation is only one part of the annotation record.
+
 The non-negotiable goal is responsiveness with large point-cloud datasets. The app should not blindly render every point in a full-density scan when the user is zoomed out. It should use spatial indexing, level of detail, culling, sampling, preprocessing, and adaptive rendering so users see enough detail for the current task without paying the cost of rendering invisible or indistinguishable points.
 
 ## Working Assumptions
@@ -12,7 +14,7 @@ The non-negotiable goal is responsiveness with large point-cloud datasets. The a
 - Add `.laz` and other formats later.
 - Run the app through reproducible containers.
 - Expect at least a frontend, backend/app engine, and database.
-- Store scan metadata, annotation state, shapes, and session data durably.
+- Store scan metadata, annotation objects, annotation geometry, class/type definitions, and session data durably.
 - Keep local-first operation possible while leaving room for distributed workflows.
 - Use pull requests for review.
 - Prefer merging rebuild PRs into a development/integration branch until the first release cycle is ready.
@@ -80,18 +82,19 @@ Goal: prove the app can create, persist, reload, export, and query annotations.
 - Draw one simple annotation shape first: a flat 2D rectangle at `z=0`.
 - Select a rectangle.
 - Translate and resize the rectangle.
-- Assign a basic label, type, color, and identifier to the annotation.
+- Represent that rectangle as an annotation object whose geometry is only one field of the record.
+- Assign a basic label, class/type, color, identifier, and nested metadata payload to the annotation.
 - Save annotation state to the database.
 - Reload a saved session.
 - Export annotations to JSON.
-- Query shape count by shape type.
+- Query annotation count by class/type and geometry representation type.
 - Warn about unsaved changes or autosave basic changes.
 
 ### Exit Criteria
 
 - A user can load a scan, draw/select/edit one rectangle annotation, save, reload, and verify the annotation is still present.
-- A user can export annotation data to JSON.
-- A basic query can count shapes by type.
+- A user can export annotation data to JSON, including label/type data, geometry, and arbitrary nested metadata.
+- A basic query can count annotations by class/type and geometry representation type.
 
 ## MVP 2: Product-Shape Expansion
 
@@ -110,7 +113,23 @@ Goal: expand from architecture proof to a credible annotation tool.
 - Select, translate, rotate, and resize shapes.
 - Export annotations to CSV.
 - Add `.laz` support.
-- Add more database queries over files, scans, shape types, dimensions, labels, and annotation status.
+- Add initial domain classes such as generic shape groups, walls, doors, or other object types that may appear in a scan.
+- Add more database queries over files, scans, annotation classes, geometry types, dimensions, labels, nested metadata, and annotation status.
+
+## Annotation Object Model
+
+LabelPC should treat annotation as the broad product concept and geometry as one representation inside it.
+
+An annotation should be able to contain:
+
+- Stable identifier, scan/file/session provenance, timestamps, and edit history.
+- Human label, color, workflow status, confidence, owner, and notes.
+- Class/type information, including user-defined classes and product-defined classes such as wall, door, fixture, region, measurement, or generic shape group.
+- One or more physical representations that overlap the point cloud, such as a rectangle, box, line, point, polygon, mesh, selected point set, derived surface, or linked geometry.
+- Arbitrary nested metadata, stored in a way that can survive import/export and evolve without a database migration for every new field.
+- Relationships to other annotations, such as group membership, parent/child structures, object parts, alternative interpretations, or references between observations.
+
+The early implementation can keep this simple, but it should not hard-code annotation to mean only "shape." The data model should leave room for annotations that carry thoughts, perspectives, classifications, measurements, and domain-specific object descriptions.
 
 ## Later Product Milestones
 
@@ -139,7 +158,7 @@ These are important, but they should not block the first architecture proof.
 - Store every known scan/file.
 - Store scan metadata and provenance.
 - Store annotations per scan/file/session.
-- Preserve shape geometry, labels, colors, types, and edit history where practical.
+- Preserve annotation object data, geometry representations, labels, colors, classes/types, nested metadata, relationships, and edit history where practical.
 - Support future inventory queries across scans and annotations.
 
 ### UX
