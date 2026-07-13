@@ -14,6 +14,7 @@ The Project Manager is not the final product authority and does not replace engi
 - Ensure each milestone has measurable exit criteria.
 - Ensure each feature has a test strategy before it is considered done.
 - Watch for architectural drift away from the core goal: responsive large point-cloud annotation with flexible annotation objects.
+- Watch for drift away from the current architecture intent: web-first core app, durable API, central annotation model, and small internal extension contracts for replaceable viewers, tools, and workers.
 - Ensure documentation stays current as the product direction evolves.
 - Keep pull requests reviewable by encouraging small, coherent changes.
 - Protect release history by ensuring the current `master` branch is frozen with a branch or tag before destructive rebuild work lands on `master`.
@@ -29,10 +30,13 @@ The Project Manager should define and maintain metrics in these categories:
 
 - Supported file formats.
 - Supported viewer modes.
+- Registered viewer providers and the contracts they implement.
 - Supported annotation types.
 - Supported annotation classes and class definitions.
 - Supported shape edit operations.
 - Supported physical representation types for annotations.
+- Registered tool providers and which commands/interactions they expose.
+- Registered worker providers and which import, indexing, geometry, or export jobs they expose.
 - Supported arbitrary/nested annotation metadata.
 - Import/export formats.
 - Query capabilities over scans and annotations.
@@ -96,10 +100,14 @@ The Project Manager should coordinate with:
 - Responsiveness with large point clouds beats architectural purity.
 - Prove risky assumptions with small spikes before committing to large rewrites.
 - Prefer visible milestone progress over broad unfinished frameworks.
+- Prefer a web-first app when it can meet the user workflow; keep native clients as optional future API clients or extensions rather than the default product surface.
+- Use extension boundaries first as internal architecture contracts, not as a public marketplace.
+- Keep the core responsible for the app API, persistence, annotation semantics, command/event coordination, migrations, and query/export behavior.
+- Allow viewers, tools, panels, and workers to be replaceable, but do not let them redefine the central annotation object model or create unqueryable private state.
 - Keep the data model durable enough for future distributed use, even while the first deployment is local.
 - Treat annotations as extensible domain objects; geometry is one facet of the annotation, not the whole concept.
 - Treat rendering performance, persistence, and test coverage as product features.
-- Do not lock the project into Qt, web-native rendering, streaming, Rust, Python, C++, or JavaScript before evidence supports the choice.
+- Do not lock the project into Qt, streaming, Rust, Python, C++, JavaScript, Tauri, VTK, pygame, or any single renderer before evidence supports the choice.
 - Prefer deleting legacy code over preserving it by inertia.
 - Any retained legacy code must earn its place through review, tests, and vulnerability checks.
 - A major-version upgrade is expected for the rebuild because compatibility and architecture may change substantially.
@@ -114,6 +122,8 @@ For each milestone or major feature, verify:
 - Performance-sensitive behavior has at least basic measurements.
 - Database changes include migration or initialization notes.
 - Annotation schema changes preserve room for arbitrary nested metadata and future domain classes.
+- Viewer, tool, or worker additions use the internal extension contracts when those contracts exist.
+- Native or alternate clients use the app API instead of forking persistence, annotation semantics, or export formats.
 - Import/export changes include sample data or examples.
 - Retained legacy code has been reviewed and has an owner.
 - Retained dependencies have been checked for known vulnerabilities and maintenance status.
@@ -126,6 +136,8 @@ For each milestone or major feature, verify:
 For the MVP 0 architecture proof, the Project Manager should track:
 
 - Container launch path for frontend, backend, and database.
+- Web-first app shell and API boundaries.
+- Minimal internal extension registry for viewer, tool, and worker providers.
 - Representative `.las` import path.
 - Event-pipeline readiness for mouse, drag, wheel, and keyboard modifiers.
 - Initial spatial index or level-of-detail strategy.

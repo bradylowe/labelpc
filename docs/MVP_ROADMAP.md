@@ -2,11 +2,45 @@
 
 ## Product Direction
 
-LabelPC is being redesigned as a responsive point-cloud annotation and analysis app. The future architecture is intentionally open: the project may become web-native, keep a Qt engine behind a browser stream for a while, move heavy calculations into Rust/C++/Python workers, or split responsibilities across multiple containers.
+LabelPC is being redesigned as a responsive point-cloud annotation and analysis app. The default rebuild direction is web-first: if the browser can provide the workflow, performance, and privacy model users need, the primary app should be a web application backed by a durable app engine and database.
+
+The architecture should still leave room for native power-user surfaces later. A PyQt/PySide, Qt, Tauri, VTK, pygame, or other local GUI viewer should be able to plug into the same application API as an optional client or extension when a user needs local-machine rendering, privacy, special hardware access, or a workflow that the browser cannot satisfy. Native clients are not the initial product default; they are replaceable surfaces that should not own the core data model.
 
 The product is about more than drawing shapes on point clouds. A point cloud is the spatial evidence layer. An annotation is a flexible domain object layered onto that evidence: it may represent a physical thing, a region, a measurement, a class of similar objects, an inspection note, a hypothesis, a workflow state, or an arbitrary nested bundle of user-defined information. Most annotations will have some physical representation that overlaps the point cloud, but the physical representation is only one part of the annotation record.
 
 The non-negotiable goal is responsiveness with large point-cloud datasets. The app should not blindly render every point in a full-density scan when the user is zoomed out. It should use spatial indexing, level of detail, culling, sampling, preprocessing, and adaptive rendering so users see enough detail for the current task without paying the cost of rendering invisible or indistinguishable points.
+
+## Core and Extension Architecture
+
+LabelPC should be modular from the beginning, but the first product should not be a public plugin marketplace. The early extension boundary is an engineering tool: it lets the team swap viewers, renderers, importers, workers, and interaction tools without rewriting the whole app. After the contracts stabilize, the same boundaries may grow into a real external extension system.
+
+The mental model is closer to a narrow, domain-specific version of VS Code than to a monolithic desktop tool. The core owns durable product concepts. Extensions provide optional or replaceable capabilities.
+
+The core system should own:
+
+- Projects, files, scans, sessions, layout state, settings, commands, and undo/redo.
+- The application API used by the web frontend and any future native clients.
+- The scan registry and durable database migrations.
+- Annotation objects, class/type definitions, physical representation records, relationships, provenance, and nested metadata.
+- Import/export contracts, query contracts, and permission boundaries.
+- The command/event bus that lets viewers, tools, workers, and panels coordinate without directly owning each other.
+
+Replaceable modules may provide:
+
+- Viewer surfaces, such as a top-down web point-cloud viewer, a later 3D web viewer, a VTK-backed local viewer, a Qt/Tauri client, or an experimental WebGPU renderer.
+- Interaction tools, such as pan/zoom, drag-select, draw-rectangle, transform, measurement, and shape-edit tools.
+- Worker capabilities, such as `.las` import, spatial indexing, level-of-detail generation, geometry calculations, feature extraction, and exports.
+- Panels and workflow widgets, such as annotation inspectors, scan inventory views, class/type managers, performance dashboards, and query builders.
+
+Extensions should register capabilities against stable contracts. They should not casually own the database schema, redefine what an annotation means, bypass the core persistence model, or create private state that cannot be queried or exported through the app. The annotation object model stays central even when a particular viewer or tool is replaceable.
+
+For MVP 0, keep the extension surface deliberately small:
+
+- `ViewerProvider`: mounts a viewer, receives scan/camera/input state, renders through its chosen backend, and emits selection or viewport events.
+- `ToolProvider`: registers user-facing commands and interaction modes such as pan, drag-select, and draw-rectangle.
+- `WorkerProvider`: registers background capabilities such as import, indexing, level-of-detail generation, and export while reporting progress and status.
+
+Everything else should remain boring and central until the team has evidence that another extension point is worth stabilizing.
 
 ## Working Assumptions
 
@@ -14,6 +48,9 @@ The non-negotiable goal is responsiveness with large point-cloud datasets. The a
 - Add `.laz` and other formats later.
 - Run the app through reproducible containers.
 - Expect at least a frontend, backend/app engine, and database.
+- Treat the web app as the primary user surface unless evidence shows it cannot meet the workflow or performance requirements.
+- Keep the app API clean enough that future native clients can plug in without forking the product model.
+- Use an internal extension registry for early viewers, tools, and workers; postpone any public third-party plugin marketplace.
 - Store scan metadata, annotation objects, annotation geometry, class/type definitions, and session data durably.
 - Keep local-first operation possible while leaving room for distributed workflows.
 - Use pull requests for review.
@@ -48,12 +85,17 @@ This should start as documentation and status files before becoming a live cron 
 
 ## MVP 0: Architecture Proof
 
-Goal: prove the chosen stack can launch, load a point cloud, render it interactively, and persist basic scan state before building every annotation tool.
+Goal: prove the chosen stack can launch, load a point cloud, render it interactively, and persist basic scan state before building every annotation tool. MVP 0 should also prove the smallest useful internal extension contracts, not a full plugin marketplace.
 
 ### Scope
 
 - Containerized launch for backend, frontend, and database.
 - Responsive frontend shell.
+- Core app shell with a minimal command/event bus.
+- Internal extension registry for the first viewer, first interaction tools, and first import/index worker.
+- A first `ViewerProvider` implementation for the top-down point-cloud view.
+- First `ToolProvider` implementations for pan, zoom, and basic pointer/drag handling.
+- First `WorkerProvider` implementation for `.las` import and index/status reporting.
 - User event pipeline for mouse move, click, drag, wheel/zoom, and key modifiers.
 - Load one `.las` file.
 - Generate, store, or use a basic spatial index or level-of-detail representation.
@@ -70,6 +112,7 @@ Goal: prove the chosen stack can launch, load a point cloud, render it interacti
 - A user can pan and zoom the top-down point-cloud view without obvious lag on the representative dataset.
 - The database records that the scan exists.
 - The app exposes enough performance/status information to know whether rendering is adaptive.
+- The first viewer, tool, and worker are registered through internal contracts instead of being hard-wired directly into unrelated layers.
 
 ## MVP 1: Minimal Annotation Loop
 
@@ -138,9 +181,10 @@ These are important, but they should not block the first architecture proof.
 - Arbitrary 2D polygons.
 - Arbitrary 3D polygons or mesh-like triangular-face annotations.
 - Full Blender/Unity-style transform gizmo polish.
-- Full widget/plugin framework.
+- Public third-party plugin marketplace or broad external extension SDK.
 - Distributed multi-user mode.
-- Browser streaming or remote viewport delivery if web-native rendering is not the first path.
+- Browser streaming or remote viewport delivery if a web-native viewer cannot satisfy a required workflow.
+- Native Qt/Tauri/PyQt/PySide/VTK/pygame viewer clients, unless evidence shows they are needed earlier for performance, privacy, or hardware access.
 - Advanced inventory search across all known scans and annotations.
 - Support for additional point-cloud formats beyond `.las` and `.laz`.
 
@@ -163,6 +207,8 @@ These are important, but they should not block the first architecture proof.
 
 ### UX
 
+- Prefer a web-first user experience that is install-light and accessible through the browser.
+- Keep future native clients compatible through the app API rather than by forking data semantics.
 - Keep interaction responsive before adding more tools.
 - Provide import status and clear error states for invalid or huge files.
 - Provide dirty-state warnings or autosave.
