@@ -107,7 +107,7 @@ The Project Manager should coordinate with:
 - Keep the data model durable enough for future distributed use, even while the first deployment is local.
 - Treat annotations as extensible domain objects; geometry is one facet of the annotation, not the whole concept.
 - Treat rendering performance, persistence, and test coverage as product features.
-- Do not lock the project into Qt, streaming, Rust, Python, C++, JavaScript, Tauri, VTK, pygame, or any single renderer before evidence supports the choice.
+- Do not lock the project into any native framework, streaming model, language, or renderer before evidence supports the choice.
 - Prefer deleting legacy code over preserving it by inertia.
 - Any retained legacy code must earn its place through review, tests, and vulnerability checks.
 - A major-version upgrade is expected for the rebuild because compatibility and architecture may change substantially.

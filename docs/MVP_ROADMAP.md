@@ -4,7 +4,7 @@
 
 LabelPC is being redesigned as a responsive point-cloud annotation and analysis app. The default rebuild direction is web-first: if the browser can provide the workflow, performance, and privacy model users need, the primary app should be a web application backed by a durable app engine and database.
 
-The architecture should still leave room for native power-user surfaces later. A PyQt/PySide, Qt, Tauri, VTK, pygame, or other local GUI viewer should be able to plug into the same application API as an optional client or extension when a user needs local-machine rendering, privacy, special hardware access, or a workflow that the browser cannot satisfy. Native clients are not the initial product default; they are replaceable surfaces that should not own the core data model.
+The architecture should still leave room for alternate power-user surfaces later. If a future user needs local-machine rendering, privacy, special hardware access, or a workflow that the browser cannot satisfy, a purpose-built client should be able to plug into the same application API as an optional extension. No native framework or renderer is currently endorsed; build the surface that is needed when evidence shows it is needed. Alternate clients are not the initial product default, and they should not own the core data model.
 
 The product is about more than drawing shapes on point clouds. A point cloud is the spatial evidence layer. An annotation is a flexible domain object layered onto that evidence: it may represent a physical thing, a region, a measurement, a class of similar objects, an inspection note, a hypothesis, a workflow state, or an arbitrary nested bundle of user-defined information. Most annotations will have some physical representation that overlaps the point cloud, but the physical representation is only one part of the annotation record.
 
@@ -27,7 +27,7 @@ The core system should own:
 
 Replaceable modules may provide:
 
-- Viewer surfaces, such as a top-down web point-cloud viewer, a later 3D web viewer, a VTK-backed local viewer, a Qt/Tauri client, or an experimental WebGPU renderer.
+- Viewer surfaces, such as a top-down web point-cloud viewer, a later 3D web viewer, a local high-performance viewer, or an experimental renderer.
 - Interaction tools, such as pan/zoom, drag-select, draw-rectangle, transform, measurement, and shape-edit tools.
 - Worker capabilities, such as `.las` import, spatial indexing, level-of-detail generation, geometry calculations, feature extraction, and exports.
 - Panels and workflow widgets, such as annotation inspectors, scan inventory views, class/type managers, performance dashboards, and query builders.
@@ -184,7 +184,7 @@ These are important, but they should not block the first architecture proof.
 - Public third-party plugin marketplace or broad external extension SDK.
 - Distributed multi-user mode.
 - Browser streaming or remote viewport delivery if a web-native viewer cannot satisfy a required workflow.
-- Native Qt/Tauri/PyQt/PySide/VTK/pygame viewer clients, unless evidence shows they are needed earlier for performance, privacy, or hardware access.
+- Alternate native or local viewer clients, unless evidence shows they are needed earlier for performance, privacy, or hardware access.
 - Advanced inventory search across all known scans and annotations.
 - Support for additional point-cloud formats beyond `.las` and `.laz`.
 
