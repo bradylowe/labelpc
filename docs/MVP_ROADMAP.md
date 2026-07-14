@@ -58,6 +58,62 @@ Everything else should remain boring and central until the team has evidence tha
 - Before overwriting or radically replacing `master`, freeze the current historical `master` state with a branch or tag. The current package version is `4.2.6`, so a freeze name like `v4.2.6` would preserve the old Qt-era codebase before the rebuild.
 - Plan a major-version upgrade for the rebuild because compatibility and architecture are expected to change substantially.
 
+## MVP 0 Implementation Decision
+
+This is the starting architecture for MVP 0. It is a decision, not a permanent constraint. Replace pieces later when measurements or product requirements justify it.
+
+### Chosen Stack
+
+- Frontend: TypeScript, React, Vite, deck.gl/luma.gl for the first WebGL point-cloud viewer, and a small local extension registry for `ViewerProvider` and `ToolProvider` implementations.
+- Backend/app engine: Python, FastAPI, Pydantic, SQLAlchemy 2, and Alembic.
+- Database: PostgreSQL with PostGIS enabled from the beginning.
+- Worker model: start with a backend-owned worker process in the same Python codebase and image, coordinated through database-backed job records. Add Redis, Celery, RQ, or a separate queue only when MVP measurements show the local worker is not enough.
+- Point-cloud import: `laspy` for `.las` first, with optional `.laz` support through `lazrs` or `laszip` after the basic `.las` path is stable.
+- Numeric/indexing layer: NumPy arrays for parsed point data, memory-mapped or chunked derived arrays where useful, and a first simple spatial/index representation that supports both rendering LoD and later region queries.
+- Containers: Docker Compose-compatible local development with separate services for frontend, backend/worker, and Postgres/PostGIS. Keep the compose file compatible with Podman where practical, but optimize first for a repeatable local developer path.
+- Testing: Pytest for backend/import/index/data-model tests, Vitest for TypeScript contract and utility tests, and Playwright for the first browser smoke tests once the frontend shell exists.
+
+### Rendering and Indexing Direction
+
+Do not make Potree the first implementation. Potree remains a candidate to evaluate, but MVP 0 should avoid making display-only octree data the product's source of truth before selection/query behavior is proven.
+
+The first renderer should use deck.gl's `PointCloudLayer` or a minimal custom deck.gl/luma.gl layer fed by our own derived point buffers. That keeps the frontend path web-native and replaceable while leaving the point-cloud data model under LabelPC control.
+
+The first indexing path should be deliberately simple and owned by the backend:
+
+- Preserve raw file provenance and scan metadata.
+- Generate normalized derived point buffers for viewer consumption.
+- Generate one simple spatial/LoD structure for top-down rendering and viewport sampling. A coarse tile/grid or octree-like hierarchy is acceptable for MVP 0; pick the smallest implementation that proves adaptive rendering.
+- Keep enough point identity or chunk provenance to support MVP 1 drag-box selection and later polygon/region queries.
+
+Long term, LabelPC should support multiple point-cloud representations: raw source data, render-friendly LoD tiles, query-friendly spatial indexes, selected point sets, derived geometry/features, and task-specific indexes. MVP 0 should prove that these representations can be registered and tracked without pretending one structure solves every use case.
+
+### Why This Stack
+
+- React/Vite/TypeScript is the fastest path to a modern browser app shell with reliable interaction tooling and good developer experience.
+- deck.gl gives an immediate GPU-backed point-cloud path without locking the product into Potree's conversion/runtime model.
+- Python keeps import/index/geometry work close to mature point-cloud and numeric libraries, and it fits the existing project history better than starting the whole backend in a less familiar systems stack.
+- FastAPI provides a clear API boundary for the browser and future optional native clients.
+- PostgreSQL/PostGIS gives durable relational state, spatial query support, geometry indexes, and JSONB for arbitrary nested annotation metadata.
+- SQLAlchemy and Alembic keep database ownership explicit and migration-friendly.
+- A database-backed worker avoids early infrastructure sprawl while still matching the future `WorkerProvider` model.
+
+### Intentional Deferrals
+
+- No public plugin marketplace in MVP 0.
+- No Potree-first architecture unless a focused spike shows it supports selection/query requirements cleanly.
+- No native client, streamed Qt, or VNC/noVNC path unless the web-first proof fails a measured requirement.
+- No Redis/Celery/RQ until background work needs concurrency or retry semantics beyond the simple database-backed job model.
+- No arbitrary 3D polygon editing before `.las` import, top-down rendering, pan/zoom, and scan persistence work.
+
+### MVP 0 Spike Questions
+
+- Can deck.gl/luma.gl render representative top-down point subsets smoothly with our own LoD buffers?
+- How large can the first `.las` import path go before chunking/memory mapping becomes mandatory?
+- Which first spatial structure is fastest to implement while preserving future region-selection hooks: grid/tile hierarchy, k-d tree, or octree-like hierarchy?
+- Can PostGIS handle the annotation/scan geometry queries we need without storing every raw point as a database row?
+- What point identity/provenance should be retained so MVP 1 selection can become durable without exploding storage?
+
 ## Rebuild and Legacy Code Policy
 
 The rebuild does not need to preserve the current codebase. Existing files, dependencies, packaging, examples, and application modules are disposable if they block the future architecture.

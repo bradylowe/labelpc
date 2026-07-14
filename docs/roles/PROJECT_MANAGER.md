@@ -15,6 +15,7 @@ The Project Manager is not the final product authority and does not replace engi
 - Ensure each feature has a test strategy before it is considered done.
 - Watch for architectural drift away from the core goal: responsive large point-cloud annotation with flexible annotation objects.
 - Watch for drift away from the current architecture intent: web-first core app, durable API, central annotation model, and small internal extension contracts for replaceable viewers, tools, and workers.
+- Watch for drift away from the MVP 0 implementation decision unless new measurements justify changing it: React/Vite/TypeScript frontend, deck.gl/luma.gl first viewer, Python/FastAPI app engine, PostgreSQL/PostGIS persistence, SQLAlchemy/Alembic migrations, `laspy` import, NumPy-derived point buffers, and a simple backend-owned worker/indexing path.
 - Ensure documentation stays current as the product direction evolves.
 - Keep pull requests reviewable by encouraging small, coherent changes.
 - Protect release history by ensuring the current `master` branch is frozen with a branch or tag before destructive rebuild work lands on `master`.
@@ -108,6 +109,8 @@ The Project Manager should coordinate with:
 - Treat annotations as extensible domain objects; geometry is one facet of the annotation, not the whole concept.
 - Treat rendering performance, persistence, and test coverage as product features.
 - Do not lock the project into any native framework, streaming model, language, or renderer before evidence supports the choice.
+- Treat Potree as a candidate to evaluate, not the default MVP 0 architecture. If it is tested, verify point selection and region query workflows, not only rendering FPS.
+- Do not store every raw point as a normal database row unless a measured query/storage requirement proves that is necessary.
 - Prefer deleting legacy code over preserving it by inertia.
 - Any retained legacy code must earn its place through review, tests, and vulnerability checks.
 - A major-version upgrade is expected for the rebuild because compatibility and architecture may change substantially.
@@ -141,6 +144,7 @@ For the MVP 0 architecture proof, the Project Manager should track:
 - Representative `.las` import path.
 - Event-pipeline readiness for mouse, drag, wheel, and keyboard modifiers.
 - Initial spatial index or level-of-detail strategy.
+- The first spatial/LoD path should be owned by LabelPC and preserve future region-selection hooks. A simple grid/tile hierarchy, k-d tree, or octree-like hierarchy is acceptable if it proves adaptive rendering and point provenance without blocking MVP progress.
 - Top-down viewer pan/zoom responsiveness.
 - Scan metadata persistence.
 - Annotation object model readiness: identifiers, class/type fields, geometry representation fields, and nested metadata.
